@@ -10,7 +10,10 @@ struct GlassBackground: View {
     @State private var drift = false
 
     var body: some View {
-        ZStack {
+        // Color.clear занимает весь экран, пятна — в overlay: они не раздувают раскладку
+        // (в ZStack большие размытые круги делали экран шире телефона — контент вылезал за края).
+        Color.clear.overlay {
+          ZStack {
             t.background
             Circle()
                 .fill(t.accent.opacity(active ? 0.28 : 0.14))
@@ -29,7 +32,9 @@ struct GlassBackground: View {
                     .blur(radius: 140)
                     .offset(y: -40)
             }
+          }
         }
+        .clipped()
         .ignoresSafeArea()
         .onAppear {
             withAnimation(.easeInOut(duration: 9).repeatForever(autoreverses: true)) { drift = true }

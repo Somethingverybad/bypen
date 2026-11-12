@@ -64,7 +64,7 @@ targets:
           - $(inherited)
           - $(SRCROOT)/Vendor/LibXray.xcframework/ios-arm64/Headers
           - $(SRCROOT)/Vendor/HevSocks5Tunnel.xcframework/ios-arm64/Headers
-        LIBRARY_SEARCH_PATHS:
+        "LIBRARY_SEARCH_PATHS[sdk=iphoneos*]":
           - $(inherited)
           - $(SRCROOT)/Vendor/LibXray.xcframework/ios-arm64
           - $(SRCROOT)/Vendor/HevSocks5Tunnel.xcframework/ios-arm64
