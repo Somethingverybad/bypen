@@ -4,19 +4,23 @@
 import AppKit
 
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "icon-1024.png"
+let fg = CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "fg"  // Android: только X на прозрачном, уменьшенный
 let size: CGFloat = 1024
 let ctx = CGContext(data: nil, width: Int(size), height: Int(size), bitsPerComponent: 8, bytesPerRow: 0,
-                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+                    space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: (fg ? CGImageAlphaInfo.premultipliedLast : CGImageAlphaInfo.noneSkipLast).rawValue)!
 func rgb(_ hex: UInt32, _ a: CGFloat = 1) -> CGColor {
     CGColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: a)
 }
-// фон
-ctx.setFillColor(rgb(0x345B56))
-ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
-// кольцо сети
-ctx.setStrokeColor(rgb(0xC5F068, 0.13))
-ctx.setLineWidth(26)
-ctx.strokeEllipse(in: CGRect(x: 72, y: 72, width: size - 144, height: size - 144))
+if !fg {
+    ctx.setFillColor(rgb(0x345B56))
+    ctx.fill(CGRect(x: 0, y: 0, width: size, height: size))
+    ctx.setStrokeColor(rgb(0xC5F068, 0.13))
+    ctx.setLineWidth(26)
+    ctx.strokeEllipse(in: CGRect(x: 72, y: 72, width: size - 144, height: size - 144))
+} else {
+    // adaptive icon: безопасная зона 66% — X занимает ~58% холста
+    ctx.translateBy(x: size / 2, y: size / 2); ctx.scaleBy(x: 0.58, y: 0.58); ctx.translateBy(x: -size / 2, y: -size / 2)
+}
 // две капсулы под ±45°
 let c = CGPoint(x: size / 2, y: size / 2)
 let length: CGFloat = 690, thick: CGFloat = 190

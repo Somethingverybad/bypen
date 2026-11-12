@@ -1,0 +1,10 @@
+# Ядро и tun2socks — готовые сборки, качает app/libs/fetch.sh
+app/libs/*.aar
+app/libs/*.dl
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+.kotlin/
