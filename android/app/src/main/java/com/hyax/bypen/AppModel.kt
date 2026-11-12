@@ -20,6 +20,15 @@ class AppModel : ViewModel() {
     var busy by mutableStateOf(false)
     var error by mutableStateOf<String?>(null)
     private var lastProfileFetch = 0L
+    private var lastProfileError: Pair<String?, Long> = null to 0L
+
+    /** Одна и та же ошибка профиля чаще раза в минуту в журнал не пишется (шум при каждом открытии). */
+    private fun noteProfileError(msg: String?) {
+        error = msg
+        val (prev, at) = lastProfileError
+        if (msg != prev || System.currentTimeMillis() - at > 60_000) TunnelLog.log("профиль не обновлён: $msg")
+        lastProfileError = msg to System.currentTimeMillis()
+    }
 
     init {
         viewModelScope.launch { TunnelState.status.collect { status = it } }
@@ -63,9 +72,9 @@ class AppModel : ViewModel() {
             TunnelLog.log("профиль обновлён: узлов ${decoded.nodes.size}, живых ${decoded.nodes.count { it.ok }}" + (warning?.let { "; $it" } ?: ""))
         } catch (e: ApiError) {
             if (e.unauthorized) logout()
-            error = e.message; TunnelLog.log("профиль не обновлён: ${e.message}")
+            noteProfileError(e.message)
         } catch (e: Exception) {
-            error = e.message; TunnelLog.log("профиль не обновлён: ${e.message}")
+            noteProfileError(e.message)
         }
     }
 
