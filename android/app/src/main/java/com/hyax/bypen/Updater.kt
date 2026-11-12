@@ -1,5 +1,6 @@
-// Обновление APK: манифест на hyax.ru/apk/bypen/android.json
-// {"versionCode": N, "versionName": "...", "url": "...apk", "sha256": "...", "notes": "..."}.
+// Обновление APK: манифест Pinned.UPDATE_URL (scripts/publish.sh кладёт его в бакет)
+// {"versionCode": N, "versionName": "...", "url": "...apk", "sha256": "...", "notes": "...",
+//  "abis": {"arm64-v8a": {"url": "...", "sha256": "..."}, ...}} — берём свою архитектуру, иначе url.
 // Качаем в кэш, сверяем sha256, отдаём системному установщику (нужно разрешение
 // «установка из этого источника», Android спросит сам).
 package com.hyax.bypen
@@ -40,7 +41,9 @@ object Updater {
             c.setRequestProperty("Cache-Control", "no-cache")
             if (c.responseCode != 200) return@withContext
             val o = JSONObject(c.inputStream.bufferedReader().readText())
-            val info = UpdateInfo(o.getLong("versionCode"), o.optString("versionName"), o.getString("url"), o.optString("sha256"), o.optString("notes"))
+            val mine = android.os.Build.SUPPORTED_ABIS.firstNotNullOfOrNull { abi -> o.optJSONObject("abis")?.optJSONObject(abi) }
+            val info = UpdateInfo(o.getLong("versionCode"), o.optString("versionName"),
+                mine?.optString("url") ?: o.getString("url"), mine?.optString("sha256") ?: o.optString("sha256"), o.optString("notes"))
             if (info.versionCode > currentCode()) {
                 if (state.value is UpdateState.None || state.value is UpdateState.Failed) state.value = UpdateState.Available(info)
                 TunnelLog.log("есть обновление ${info.versionName} (${info.versionCode})")

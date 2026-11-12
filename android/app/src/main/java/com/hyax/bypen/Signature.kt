@@ -10,7 +10,8 @@ object Pinned {
     /** base64 публичного ключа сервера (manage.py vpn_pubkey). null — отладка. */
     val PUBLIC_KEY: String? = "mom4ETYn/8XuqZxbKEWEgk9DJcGK+l31/i4e9Bwc4Bw="
     const val API_BASE = "https://hyax.ru/api"
-    const val UPDATE_URL = "https://hyax.ru/apk/bypen/android.json"
+    // Манифест обновлений — в публичном бакете рядом с установщиками мессенджера (scripts/publish.sh)
+    const val UPDATE_URL = "https://storage.yandexcloud.net/hyax-public/installers/bypen/android.json"
 }
 
 class SignatureError(msg: String) : Exception(msg)
