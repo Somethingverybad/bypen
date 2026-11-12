@@ -42,6 +42,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         ITSAppUsesNonExemptEncryption: false
+        UIRequiresFullScreen: true   # только портрет на iPhone; без этого App Store Connect требует все ориентации «для iPad»
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
