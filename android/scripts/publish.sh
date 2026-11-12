@@ -9,7 +9,8 @@ NOTES=${1:-}
 PY=~/.hyax-venv/bin/python
 [[ -x $PY ]] || { echo "нет ~/.hyax-venv с boto3"; exit 1; }
 [[ -f ~/.hyax-s3.env ]] || { echo "нет ~/.hyax-s3.env"; exit 1; }
-export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+# Java 21 из Homebrew в java_home не зарегистрирована — тогда gradle берёт java из PATH
+JH=$(/usr/libexec/java_home -v 21 2>/dev/null || true); [[ -n $JH ]] && export JAVA_HOME=$JH
 ./gradlew --no-daemon -q assembleRelease
 CODE=$(git rev-list --count HEAD)
 set -a; source ~/.hyax-s3.env; set +a
