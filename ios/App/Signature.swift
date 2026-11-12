@@ -6,7 +6,7 @@ import Foundation
 enum Pinned {
     /// base64 публичного ключа сервера (manage.py vpn_pubkey). nil — отладочная сборка:
     /// принимаем ключ из ответа и пишем предупреждение в журнал.
-    static let publicKey: String? = nil
+    static let publicKey: String? = "mom4ETYn/8XuqZxbKEWEgk9DJcGK+l31/i4e9Bwc4Bw="
     static let apiBase = "https://hyax.ru/api"
 }
 
