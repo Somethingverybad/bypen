@@ -1,0 +1,8 @@
+# Ядро xray и tun2socks — готовые сборки с GitHub, качает Vendor/fetch.sh (~300 МБ, в git не кладём)
+Vendor/*.xcframework/
+Vendor/*.zip
+# Проект генерируется из project.yml (xcodegen generate)
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+build/
