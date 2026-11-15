@@ -38,6 +38,23 @@ enum SystemProxy {
         services().contains { run(tool, ["-getsocksfirewallproxy", $0]).out.contains("Enabled: Yes") }
     }
 
+
+    /// Имя другого VPN, через который сейчас идёт весь трафик мака (маршрут по умолчанию — через utun).
+    /// Внутри чужого туннеля наше соединение с узлом ломается (Reality получает настоящий сертификат), поэтому
+    /// сначала просим выключить его.
+    static func activeVPN() -> String? {
+        let r = run("/sbin/route", ["-n", "get", "1.1.1.1"])
+        guard r.code == 0, let line = r.out.split(separator: "\n").first(where: { $0.contains("interface:") }) else { return nil }
+        let iface = line.split(separator: ":").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        guard iface.hasPrefix("utun") || iface.hasPrefix("ipsec") || iface.hasPrefix("ppp") else { return nil }
+        let nc = run("/usr/sbin/scutil", ["--nc", "list"])
+        let connected = nc.out.split(separator: "\n").filter { $0.contains("(Connected)") }
+        if let first = connected.first, let q1 = first.firstIndex(of: "\""), let q2 = first[first.index(after: q1)...].firstIndex(of: "\"") {
+            return String(first[first.index(after: q1)..<q2])
+        }
+        return "неизвестный (\(iface))"
+    }
+
     private static func apply(_ cmds: [[String]]) -> String? {
         var failed: [[String]] = []
         for c in cmds where run(tool, c).code != 0 { failed.append(c) }

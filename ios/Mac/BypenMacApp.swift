@@ -27,6 +27,14 @@ struct BypenMacApp: App {
 /// При выходе из приложения системный прокси выключается — иначе сеть останется без выхода.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var model: MacModel?
+    /// Если прошлый запуск убили силой, прокси остаётся включённым и сеть «висит» — снимаем при старте.
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        DispatchQueue.global().async {
+            if SystemProxy.isEnabled, let err = SystemProxy.disable() {
+                TunnelLog.shared.log("прокси с прошлого запуска не снялся: \(err)")
+            }
+        }
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if let m = model, m.isActive { m.engine.stop(reason: "выход из приложения") }
         if SystemProxy.isEnabled { _ = SystemProxy.disable() }

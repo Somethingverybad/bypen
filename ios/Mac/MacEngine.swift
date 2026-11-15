@@ -35,6 +35,12 @@ final class MacEngine {
             guard let p = VpnProfile.loadSaved(), !p.nodes.isEmpty else {
                 self.status = TunnelStatus(state: .error, lastError: "Нет профиля — обновите список узлов"); self.status = TunnelStatus(); return
             }
+            if let other = SystemProxy.activeVPN() {
+                self.log.log("включён другой VPN: \(other) — внутри чужого туннеля узлы не отвечают")
+                self.status = TunnelStatus(state: .error, lastError: "Выключите другой VPN (\(other)) и подключитесь снова")
+                self.status = TunnelStatus(state: .stopped, lastError: "Выключите другой VPN (\(other)) и подключитесь снова")
+                return
+            }
             self.profile = p
             self.settings = TunnelSettings.load()
             self.running = true

@@ -53,7 +53,8 @@ enum Health {
                                     let http = "GET \(target.path) HTTP/1.1\r\nHost: \(target.host)\r\nUser-Agent: Mozilla/5.0\r\nConnection: close\r\n\r\n"
                                     conn.send(content: Data(http.utf8), completion: .contentProcessed { _ in
                                         conn.receive(minimumIncompleteLength: 12, maximumLength: 4096) { data, _, _, err in
-                                            if let err = err { finish(false, "http: \(err)"); return }
+                                            if let err = err { finish(false, "http: \(err.localizedDescription.isEmpty ? String(describing: err) : err.localizedDescription)"); return }
+                                            if data == nil || data!.isEmpty { finish(false, "http: соединение закрыто без ответа"); return }
                                             let s = String(decoding: data ?? Data(), as: UTF8.self)
                                             if s.hasPrefix("HTTP/1.") , s.count >= 12, let code = Int(s[s.index(s.startIndex, offsetBy: 9)..<s.index(s.startIndex, offsetBy: 12)]), code < 500 {
                                                 finish(true, nil)
