@@ -10,8 +10,14 @@ enum AppGroup {
     static let tunnelBundleId = "com.hyax.bypen.tunnel"
 
     static var container: URL {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id)
+        #if os(macOS)
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Bypen")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+        #else
+        return FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id)
             ?? FileManager.default.temporaryDirectory
+        #endif
     }
     static var profileURL: URL { container.appendingPathComponent("profile.json") }
     static var settingsURL: URL { container.appendingPathComponent("settings.json") }

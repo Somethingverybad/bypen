@@ -5,13 +5,14 @@ import Foundation
 
 enum XrayConfig {
     static let socksPort = 10808
+    static let httpPort = 10809
 
     static let privateNets = [
         "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "169.254.0.0/16",
         "100.64.0.0/10", "224.0.0.0/4", "fc00::/7", "fe80::/10", "ff00::/8",
     ]
 
-    static func build(node: VpnNode, uuid: String) -> String {
+    static func build(node: VpnNode, uuid: String, withHTTP: Bool = false) -> String {
         var user: [String: Any] = ["id": uuid, "encryption": "none"]
         if let flow = node.flow, !flow.isEmpty { user["flow"] = flow }
 
@@ -46,16 +47,17 @@ enum XrayConfig {
         }
         stream["sockopt"] = ["tcpKeepAliveInterval": 30]
 
+        let sniff: [String: Any] = ["enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": false]
+        var inbounds: [[String: Any]] = [[
+            "tag": "socks", "listen": "127.0.0.1", "port": socksPort, "protocol": "socks",
+            "settings": ["auth": "noauth", "udp": true], "sniffing": sniff,
+        ]]
+        if withHTTP {
+            inbounds.append(["tag": "http", "listen": "127.0.0.1", "port": httpPort, "protocol": "http", "sniffing": sniff])
+        }
         let cfg: [String: Any] = [
             "log": ["loglevel": "warning", "error": AppGroup.xrayLogURL.path],
-            "inbounds": [[
-                "tag": "socks",
-                "listen": "127.0.0.1",
-                "port": socksPort,
-                "protocol": "socks",
-                "settings": ["auth": "noauth", "udp": true],
-                "sniffing": ["enabled": true, "destOverride": ["http", "tls", "quic"], "routeOnly": false],
-            ]],
+            "inbounds": inbounds,
             "outbounds": [
                 [
                     "tag": "proxy",

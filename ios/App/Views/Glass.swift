@@ -91,7 +91,13 @@ extension View {
 }
 
 enum Haptic {
+    #if canImport(UIKit)
     static func tap() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
     static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
     static func warning() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+    #else
+    static func tap() {}
+    static func success() {}
+    static func warning() {}
+    #endif
 }

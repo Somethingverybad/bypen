@@ -4,6 +4,7 @@ options:
   bundleIdPrefix: com.hyax
   deploymentTarget:
     iOS: "17.0"
+    macOS: "13.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 settings:
@@ -54,6 +55,7 @@ targets:
     sources:
       - Tunnel
       - Shared
+      - Core
     # Ядро и tun2socks — статические библиотеки из Vendor/*.xcframework (Vendor/fetch.sh);
     # линкуем напрямую, а не как xcframework: оба несут module.modulemap, Xcode их сталкивает.
     settings:
@@ -88,3 +90,49 @@ targets:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.networkextension.packet-tunnel
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).PacketTunnelProvider
+
+  # macOS: без туннеля — ядро Xray в приложении, системный прокси (SOCKS + HTTP) через networksetup.
+  # Полный туннель (Network Extension как system extension) требует у Apple отдельного
+  # разрешения для Developer ID — запросить, потом добавить.
+  BypenMac:
+    type: application
+    platform: macOS
+    sources:
+      - Mac
+      - Shared
+      - Core
+      - Tunnel/Health.swift
+      - App/API.swift
+      - App/Keychain.swift
+      - App/Signature.swift
+      - App/Views/Theme.swift
+      - App/Views/Glass.swift
+      - path: App/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hyax.bypen.mac
+        PRODUCT_NAME: Bypen
+        CODE_SIGN_ENTITLEMENTS: Mac/BypenMac.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_OBJC_BRIDGING_HEADER: Mac/Mac-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/Vendor/LibXray.xcframework/macos-arm64_x86_64/Headers
+        LIBRARY_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/Vendor/LibXray.xcframework/macos-arm64_x86_64
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lresolv
+          - -lXray
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleDisplayName: Бупень
+    info:
+      path: Mac/Info.plist
+      properties:
+        CFBundleDisplayName: Бупень
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: "13.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: WYX

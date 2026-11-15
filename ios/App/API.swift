@@ -31,7 +31,14 @@ final class API {
         let i = Bundle.main.infoDictionary
         return "\(i?["CFBundleShortVersionString"] ?? "?") (\(i?["CFBundleVersion"] ?? "?"))"
     }
-    static var appTag: String { "ios \(version)" }
+    #if os(macOS)
+    static let platform = "mac"
+    static let deviceName = "Бупень · Mac"
+    #else
+    static let platform = "ios"
+    static let deviceName = "Бупень · iPhone"
+    #endif
+    static var appTag: String { "\(platform) \(version)" }
 
     var deviceId: String {
         if let d = UserDefaults.standard.string(forKey: "deviceId") { return d }
@@ -45,8 +52,8 @@ final class API {
     func login(username: String, password: String) async throws {
         let body: [String: Any] = [
             "username": username, "password": password,
-            "device_id": deviceId, "device_name": "Бупень · iPhone",
-            "platform": "ios", "app_version": API.version,
+            "device_id": deviceId, "device_name": API.deviceName,
+            "platform": API.platform, "app_version": API.version,
         ]
         let (data, resp) = try await send(path: "token/", method: "POST", body: body, auth: false)
         let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
@@ -116,7 +123,7 @@ final class API {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue(API.appTag, forHTTPHeaderField: "X-WYX-App")
-        req.setValue("Bypen/\(API.version) iOS", forHTTPHeaderField: "User-Agent")
+        req.setValue("Bypen/\(API.version) \(API.platform)", forHTTPHeaderField: "User-Agent")
         if auth, let a = access { req.setValue("Bearer \(a)", forHTTPHeaderField: "Authorization") }
         if let body { req.httpBody = try JSONSerialization.data(withJSONObject: body) }
         do {
