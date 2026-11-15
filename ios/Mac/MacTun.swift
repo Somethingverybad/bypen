@@ -12,7 +12,8 @@ enum MacTun {
     static func ensureHelper() -> String? {
         if send(["cmd": "ping"]) != nil { return nil }
         guard FileManager.default.fileExists(atPath: helperURL.path) else { return "в пакете нет bypen-tun" }
-        let cmd = "nohup '\(helperURL.path.replacingOccurrences(of: "'", with: "'\\''"))' --uid \(getuid()) --parent \(getpid()) >/tmp/bypen-tun.log 2>&1 &"
+        // nohup под osascript не работает («can't detach from console»), помощник сам делает setsid.
+        let cmd = "'\(helperURL.path.replacingOccurrences(of: "'", with: "'\\''"))' --uid \(getuid()) --parent \(getpid()) </dev/null >/tmp/bypen-tun.log 2>&1 &"
         let script = "do shell script \"\(cmd.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
         let p = Process(); p.executableURL = URL(fileURLWithPath: "/usr/bin/osascript"); p.arguments = ["-e", script]
         let err = Pipe(); p.standardError = err; p.standardOutput = Pipe()

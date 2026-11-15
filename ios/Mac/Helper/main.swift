@@ -240,7 +240,10 @@ func handle(_ cmd: [String: Any]) -> [String: Any] {
     case "down": return tunnel.down()
     case "stats": return tunnel.stats()
     case "ping": return ["ok": true, "pid": Int(getpid())]
-    case "quit": shutdown("по команде")
+    case "quit":
+        // ответить успеем, выйти — чуть позже
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.2) { shutdown("по команде") }
+        return ["ok": true]
     default: return ["ok": false, "error": "неизвестная команда"]
     }
 }
@@ -265,6 +268,9 @@ func serve(client: Int32) {
     }
 }
 
+// отцепляемся от терминала osascript, чтобы «do shell script» не ждал нас
+_ = setsid()
+signal(SIGHUP, SIG_IGN)
 signal(SIGTERM) { _ in shutdown("SIGTERM") }
 signal(SIGINT) { _ in shutdown("SIGINT") }
 signal(SIGPIPE, SIG_IGN)
