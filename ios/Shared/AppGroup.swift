@@ -37,6 +37,18 @@ struct TunnelSettings: Codable, Equatable {
     var rotateMinutes = 60
     /// Узел, выбранный вручную (nil — автоматически, живые первыми).
     var preferredNode: String?
+    /// Мак: вместо системного прокси поднимать TUN (весь трафик, нужен пароль администратора).
+    var macTun = false
+
+    init() {}
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        autoSwitch = try c.decodeIfPresent(Bool.self, forKey: .autoSwitch) ?? true
+        rotateIdle = try c.decodeIfPresent(Bool.self, forKey: .rotateIdle) ?? false
+        rotateMinutes = try c.decodeIfPresent(Int.self, forKey: .rotateMinutes) ?? 60
+        preferredNode = try c.decodeIfPresent(String.self, forKey: .preferredNode)
+        macTun = try c.decodeIfPresent(Bool.self, forKey: .macTun) ?? false
+    }
 
     static func load() -> TunnelSettings {
         guard let d = try? Data(contentsOf: AppGroup.settingsURL),

@@ -178,6 +178,18 @@ struct MacSettingsView: View {
             Section("Оформление") {
                 Picker("Тема", selection: $model.appearance) { Text("Мята тёмная").tag("dark"); Text("Мята светлая").tag("light") }
             }
+            Section("Режим") {
+                Picker("Как пускать трафик", selection: $model.settings.macTun) {
+                    Text("Системный прокси").tag(false)
+                    Text("TUN — весь трафик").tag(true)
+                }
+                .disabled(model.isActive)
+                Text(model.settings.macTun
+                     ? "Виртуальный сетевой интерфейс: через туннель идут все программы, включая те, что не уважают прокси. При подключении один раз спросит пароль администратора."
+                     : "SOCKS и HTTP-прокси в настройках сети. Программы, которые прокси не уважают, идут напрямую. Пароль не нужен.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if model.isActive { Text("Сменить режим можно после отключения.").font(.caption).foregroundStyle(.secondary) }
+            }
             Section("Переключение") {
                 Toggle("Переключать узел, если не отвечает", isOn: $model.settings.autoSwitch)
             }
@@ -195,7 +207,6 @@ struct MacSettingsView: View {
             Section("О приложении") {
                 LabeledContent("Версия", value: API.version)
                 LabeledContent("Ядро Xray", value: model.status.xrayVersion ?? "—")
-                Text("Режим: системный прокси (SOCKS и HTTP). Программы, которые прокси не уважают, идут напрямую.").font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped).frame(width: 440, height: 520)

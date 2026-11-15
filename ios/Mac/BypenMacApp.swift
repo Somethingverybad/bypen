@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if let m = model, m.isActive { m.engine.stop(reason: "выход из приложения") }
         if SystemProxy.isEnabled { _ = SystemProxy.disable() }
+        MacTun.quitHelper()
         return .terminateNow
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

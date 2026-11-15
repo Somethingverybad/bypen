@@ -26,6 +26,12 @@ struct VpnNode: Codable, Identifiable, Equatable {
 
     /// Куда реально подключаться: IP из Москвы (пробник), иначе имя.
     var dialAddress: String { ips?.first ?? host }
+    /// Адреса, которые в режиме TUN должны идти мимо туннеля (иначе ядро само себя закольцует).
+    var dialIPs: [String] {
+        if let ips, !ips.isEmpty { return ips }
+        let isIP = host.allSatisfy { $0.isHexDigit || $0 == "." || $0 == ":" } && host.contains(where: { $0 == "." || $0 == ":" })
+        return isIP ? [host] : []
+    }
     var isReality: Bool { kind == "reality" }
 }
 

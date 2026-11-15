@@ -94,11 +94,41 @@ targets:
   # macOS: без туннеля — ядро Xray в приложении, системный прокси (SOCKS + HTTP) через networksetup.
   # Полный туннель (Network Extension как system extension) требует у Apple отдельного
   # разрешения для Developer ID — запросить, потом добавить.
+  BypenTunHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - Mac/Helper
+    settings:
+      base:
+        PRODUCT_NAME: bypen-tun
+        PRODUCT_BUNDLE_IDENTIFIER: com.hyax.bypen.mac.tun
+        ENABLE_HARDENED_RUNTIME: YES
+        SWIFT_OBJC_BRIDGING_HEADER: Mac/Helper/Helper-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/Vendor/HevSocks5Tunnel.xcframework/macos-arm64_x86_64/Headers
+        LIBRARY_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/Vendor/HevSocks5Tunnel.xcframework/macos-arm64_x86_64
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lhev-socks5-tunnel
+        SKIP_INSTALL: YES
+
   BypenMac:
     type: application
     platform: macOS
+    dependencies:
+      - target: BypenTunHelper
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
     sources:
-      - Mac
+      - path: Mac
+        excludes:
+          - Helper
       - Shared
       - Core
       - Tunnel/Health.swift

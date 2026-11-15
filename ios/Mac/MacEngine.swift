@@ -23,6 +23,7 @@ final class MacEngine {
     private var failedRecently: [String: Date] = [:]
     private var samples: [(Date, Int)] = []
     private var bytesUp = 0, bytesDown = 0
+    private var tunMode = false
 
     var isRunning: Bool { running }
 
@@ -48,11 +49,20 @@ final class MacEngine {
             guard let node = self.startFirstAvailable(order: p.order(preferred: preferred ?? self.settings.preferredNode)) else {
                 self.fail("Ни один узел не запустился"); return
             }
-            if let err = SystemProxy.enable(socksPort: XrayConfig.socksPort, httpPort: XrayConfig.httpPort) {
-                self.log.log("системный прокси не включился: \(err)")
-                XrayCore.stop(); self.fail("Не удалось включить системный прокси: \(err)"); return
+            self.tunMode = self.settings.macTun
+            if self.tunMode {
+                if let err = MacTun.up(socksPort: XrayConfig.socksPort, exclude: node.dialIPs) {
+                    self.log.log("TUN не поднялся: \(err)")
+                    XrayCore.stop(); self.fail("TUN не поднялся: \(err)"); return
+                }
+                self.log.log("TUN поднят (весь трафик через туннель), узел исключён: \(node.dialIPs.joined(separator: ", "))")
+            } else {
+                if let err = SystemProxy.enable(socksPort: XrayConfig.socksPort, httpPort: XrayConfig.httpPort) {
+                    self.log.log("системный прокси не включился: \(err)")
+                    XrayCore.stop(); self.fail("Не удалось включить системный прокси: \(err)"); return
+                }
+                self.log.log("системный прокси включён (SOCKS \(XrayConfig.socksPort), HTTP \(XrayConfig.httpPort))")
             }
-            self.log.log("системный прокси включён (SOCKS \(XrayConfig.socksPort), HTTP \(XrayConfig.httpPort))")
             self.became(node)
             self.scheduleProbe(after: 1.5)
         }
@@ -64,7 +74,7 @@ final class MacEngine {
             self.running = false
             self.probeWork?.cancel()
             self.log.log("остановка (\(reason))")
-            if let err = SystemProxy.disable() { self.log.log("системный прокси не выключился: \(err)") }
+            self.tearDownNetwork()
             XrayCore.stop()
             self.current = nil
             self.status = TunnelStatus(state: .stopped)
@@ -74,9 +84,15 @@ final class MacEngine {
     func switchNow(to id: String?) { q.async { self.switchNode(to: id, reason: "по команде") } }
     func probeNow() { q.async { self.scheduleProbe(after: 0) } }
 
+    /// Снять то, что ставили: прокси или TUN.
+    private func tearDownNetwork() {
+        if tunMode { MacTun.down() }
+        else if let err = SystemProxy.disable() { log.log("системный прокси не выключился: \(err)") }
+    }
+
     private func fail(_ message: String) {
         log.log(message)
-        _ = SystemProxy.disable()
+        tearDownNetwork()
         running = false
         status = TunnelStatus(state: .error, lastError: message)
         status = TunnelStatus(state: .stopped, lastError: message)
@@ -132,6 +148,7 @@ final class MacEngine {
             if let err = XrayCore.run(configJSON: XrayConfig.build(node: next, uuid: p.user.uuid, withHTTP: true)) {
                 log.log("узел \(next.name): ядро не запустилось — \(err)"); failedRecently[next.id] = Date(); XrayCore.stop(); continue
             }
+            if tunMode { MacTun.exclude(next.dialIPs) }
             log.log("переключение: \(cur?.name ?? "—") → \(next.name) (\(reason))")
             status.switches += 1
             became(next)
