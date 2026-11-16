@@ -181,8 +181,7 @@ fun MainScreen(model: AppModel, t: Theme, activity: MainActivity, onLog: () -> U
                 // градиент по диагонали (в макете 144°): защищено — лайм (тёмная) или лайм→бирюза (светлая)
                 val k = if (working && t.dark) 0.85f else 1f
                 val discBrush = if (on) Brush.linearGradient(listOf(t.buttonOnStart, t.buttonOnEnd))
-                    else Brush.linearGradient(listOf(t.buttonIdleStart.copy(alpha = t.buttonIdleStart.alpha * k), t.buttonIdleEnd.copy(alpha = t.buttonIdleEnd.alpha * k)),
-                                              start = Offset(0.2f * 600, 0.1f * 600), end = Offset(0.8f * 600, 0.95f * 600))
+                    else Brush.linearGradient(listOf(t.buttonIdleStart.copy(alpha = t.buttonIdleStart.alpha * k), t.buttonIdleEnd.copy(alpha = t.buttonIdleEnd.alpha * k)))
                 Box(Modifier.size(disc)
                     .background(discBrush, CircleShape)
                     .border1(if (on) Color.Transparent else t.buttonIdleBorder)
