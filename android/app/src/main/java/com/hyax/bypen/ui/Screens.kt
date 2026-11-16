@@ -232,8 +232,8 @@ private fun StatusCard(model: AppModel, t: Theme, phase: Phase, onLog: () -> Uni
         Row(Modifier.fillMaxWidth()) {
             if (TunnelState.running) {
                 Metric(t, "Узел", st.nodeName ?: "—", Modifier.weight(0.41f))
-                Metric(t, "Задержка", st.lastProbeMs?.let { "$it мс" } ?: "…", Modifier.weight(0.31f))
-                Metric(t, "Трафик", "↑${bytes(st.up)} ↓${bytes(st.down)}", Modifier.weight(0.28f))
+                Metric(t, "Задержка", st.lastProbeMs?.let { "$it мс" } ?: "…", Modifier.weight(0.28f))
+                Metric(t, "Трафик", "↑${bytes(st.up)} ↓${bytes(st.down)}", Modifier.weight(0.31f))
             } else {
                 Metric(t, "Аккаунт", model.username?.let { "@$it" } ?: "—", Modifier.weight(0.41f))
                 Metric(t, "Узлов", model.profile?.let { "${it.nodes.count { n -> n.ok }} из ${it.nodes.size}" } ?: "—", Modifier.weight(0.37f))
@@ -271,7 +271,7 @@ private fun UpdateCard(model: AppModel, t: Theme) {
 
 @Composable
 private fun Metric(t: Theme, label: String, value: String, modifier: Modifier) {
-    Column(modifier.padding(end = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier.padding(end = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, color = t.muted, fontSize = 12.sp)
         Text(value, color = t.text, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }

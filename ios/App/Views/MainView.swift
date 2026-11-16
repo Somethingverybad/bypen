@@ -175,8 +175,8 @@ struct MainView: View {
                 Spacer()
             }
             if model.tunnel.isActive {
-                // колонки макета: 0 / 41 % / 72 % ширины
-                columns([0.41, 0.31, 0.28], [
+                // колонки макета (x = 56 / 441 / 707 из 941 px): 41 % / 28 % / 31 %
+                columns([0.41, 0.28, 0.31], [
                     ("Узел", model.status.nodeName ?? "—"),
                     ("Задержка", model.status.lastProbeMs.map { "\($0) мс" } ?? "…"),
                     ("Трафик", "↑\(bytes(model.status.up)) ↓\(bytes(model.status.down))"),
@@ -210,10 +210,10 @@ struct MainView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.0).font(.system(size: 12)).foregroundStyle(t.muted)
                         Text(item.1).font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(t.text)
-                            .lineLimit(1).truncationMode(.tail)
+                            .lineLimit(1).minimumScaleFactor(0.85).truncationMode(.tail)
                             .contentTransition(.numericText())
                     }
-                    .padding(.trailing, 8)
+                    .padding(.trailing, 4)
                     .frame(width: geo.size.width * fractions[i], alignment: .leading)
                 }
             }
