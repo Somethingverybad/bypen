@@ -13,8 +13,8 @@ struct LoginView: View {
             VStack(spacing: 24) {
                 Spacer()
                 VStack(spacing: 2) {
-                    Text("WYX").font(.system(size: 52, weight: .heavy)).tracking(-2).foregroundStyle(t.text)
-                    Text("сеть").font(.title3).foregroundStyle(t.muted)
+                    Text("WYX").font(.system(size: 48, weight: .semibold)).foregroundStyle(t.text)
+                    Text("сеть").font(.system(size: 17)).foregroundStyle(t.subtitle)
                 }
                 .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 12)
                 VStack(spacing: 12) {
@@ -39,19 +39,18 @@ struct LoginView: View {
                         }
                         .frame(maxWidth: .infinity).padding(.vertical, 14)
                         .background(
-                            RoundedRectangle(cornerRadius: Theme.radius, style: .continuous)
-                                .fill(LinearGradient(colors: [t.primary, t.primaryDeep], startPoint: .top, endPoint: .bottom))
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(t.scheme == .dark ? t.accent : t.text)
                         )
-                        .overlay(RoundedRectangle(cornerRadius: Theme.radius, style: .continuous).strokeBorder(Color.white.opacity(0.35), lineWidth: 1))
-                        .shadow(color: t.primary.opacity(0.35), radius: 16, y: 8)
-                        .foregroundStyle(t.primaryForeground)
+                        .shadow(color: t.scheme == .dark ? t.accent.opacity(0.45) : .black.opacity(0.2), radius: 16, y: 6)
+                        .foregroundStyle(t.scheme == .dark ? t.primaryForeground : .white)
                     }
                     .disabled(username.isEmpty || password.isEmpty || model.busy)
                     .opacity(username.isEmpty || password.isEmpty ? 0.55 : 1)
                     .padding(.top, 4)
                 }
                 .padding(20)
-                .glassCard(t, radius: 24)
+                .settingsCard(t, radius: 24)
                 .opacity(appeared ? 1 : 0).offset(y: appeared ? 0 : 24)
                 Text("Аккаунт тот же, что в мессенджере. Доступ к сети выдаётся отдельно.")
                     .font(.footnote).foregroundStyle(t.muted).multilineTextAlignment(.center)

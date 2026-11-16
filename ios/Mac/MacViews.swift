@@ -16,8 +16,8 @@ struct MacLoginView: View {
         ZStack {
             GlassBackground(t: t, active: false)
             VStack(spacing: 20) {
-                Text("WYX").font(.system(size: 44, weight: .heavy)).tracking(-2).foregroundStyle(t.text)
-                Text("сеть").font(.title3).foregroundStyle(t.muted).padding(.top, -16)
+                Text("WYX").font(.system(size: 40, weight: .semibold)).foregroundStyle(t.text)
+                Text("сеть").font(.system(size: 15)).foregroundStyle(t.subtitle).padding(.top, -14)
                 VStack(spacing: 10) {
                     TextField("Ник или почта", text: $username).textFieldStyle(.plain).themedField(t)
                     SecureField("Пароль", text: $password).textFieldStyle(.plain).themedField(t)
@@ -26,7 +26,7 @@ struct MacLoginView: View {
                         Task { await model.login(username: username, password: password) }
                     } label: {
                         Text(model.busy ? "Вхожу…" : "Войти").font(.body.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(t.primary, in: RoundedRectangle(cornerRadius: 10)).foregroundStyle(t.primaryForeground)
+                            .background(t.scheme == .dark ? t.accent : t.text, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(t.scheme == .dark ? t.primaryForeground : .white)
                     }
                     .buttonStyle(.plain).keyboardShortcut(.defaultAction)
                     .disabled(username.isEmpty || password.isEmpty || model.busy)
@@ -60,20 +60,22 @@ struct MacMainView: View {
     private var title: String {
         switch phase { case .off: return "Подключить"; case .busy: return "Секунду…"; case .checking: return "Проверяю…"; case .on: return "Защищено"; case .trouble: return "Нет ответа" }
     }
-    private var color: Color {
-        switch phase { case .off: return t.surface2; case .busy, .checking: return t.primaryDeep; case .on: return t.primary; case .trouble: return t.destructive }
+    private var symbol: BigButtonSymbol.Kind {
+        switch phase { case .on: return .checkShield; case .trouble: return .warnShield; case .checking, .busy: return .halfShield; case .off: return .power }
     }
 
     var body: some View {
+        let on = phase == .on
+        let working = phase == .busy || phase == .checking
         ZStack {
-            GlassBackground(t: t, active: phase == .on)
+            GlassBackground(t: t, active: on)
             VStack(spacing: 16) {
                 HStack {
                     GlassIconButton(t: t, system: "doc.text") { showLog = true }
                     Spacer()
-                    VStack(spacing: 0) {
-                        Text("WYX").font(.system(size: 20, weight: .heavy)).tracking(-1).foregroundStyle(t.text)
-                        Text("сеть").font(.caption).foregroundStyle(t.muted)
+                    VStack(spacing: 3) {
+                        Text("WYX").font(.system(size: 24, weight: .semibold)).foregroundStyle(t.text)
+                        Text("сеть").font(.system(size: 11)).foregroundStyle(t.subtitle)
                     }
                     Spacer()
                     GlassIconButton(t: t, system: "gearshape") { showSettings = true }
@@ -83,22 +85,28 @@ struct MacMainView: View {
                     Task { if model.isActive { model.disconnect() } else { await model.connect() } }
                 } label: {
                     ZStack {
-                        Circle().fill(color.opacity(phase == .off ? 0 : 0.45)).frame(width: 220, height: 220).blur(radius: 36)
-                            .scaleEffect(phase == .on ? (breathe ? 1.08 : 0.96) : 1)
-                        Circle().fill(phase == .on ? AnyShapeStyle(LinearGradient(colors: [t.accent, t.primaryDeep], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(t.surface.opacity(0.8)))
-                            .frame(width: 190, height: 190)
-                            .overlay(Circle().strokeBorder(Color.white.opacity(t.scheme == .dark ? 0.4 : 0.9), lineWidth: 1.2))
-                            .shadow(color: color.opacity(0.35), radius: 24, y: 10)
-                        VStack(spacing: 8) {
-                            Image(systemName: phase == .on ? "checkmark.shield.fill" : (phase == .trouble ? "exclamationmark.shield" : "power")).font(.system(size: 44, weight: .semibold))
-                            Text(title).font(.title3.weight(.semibold))
+                        Circle().strokeBorder(t.accent.opacity(working ? 0.25 : 0), lineWidth: 1).frame(width: 200, height: 200)
+                            .scaleEffect(working ? (breathe ? 1.25 : 1.05) : 1).opacity(breathe ? 0 : 1)
+                        Circle()
+                            .fill(on
+                                  ? LinearGradient(colors: [t.buttonOnStart, t.buttonOnEnd], startPoint: UnitPoint(x: 0.2, y: 0.1), endPoint: UnitPoint(x: 0.8, y: 0.95))
+                                  : LinearGradient(colors: [t.buttonIdleStart.opacity(working && t.scheme == .dark ? 0.85 : 1), t.buttonIdleEnd.opacity(working && t.scheme == .dark ? 0.85 : 1)], startPoint: UnitPoint(x: 0.2, y: 0.1), endPoint: UnitPoint(x: 0.8, y: 0.95)))
+                            .frame(width: 200, height: 200)
+                            .overlay(Circle().strokeBorder(on ? .clear : t.buttonIdleBorder, lineWidth: 1))
+                            .shadow(color: on ? t.accent.opacity(0.47) : (working ? t.accent.opacity(0.48) : .clear), radius: on ? 50 : 30)
+                            .scaleEffect(on ? (breathe ? 1.015 : 1) : 1)
+                        VStack(spacing: 12) {
+                            BigButtonSymbol(kind: symbol, t: t).scaleEffect(0.9)
+                            Text(title).font(.system(size: 14, weight: .semibold))
                         }
-                        .foregroundStyle(phase == .on ? t.primaryForeground : t.text)
+                        .foregroundStyle(on ? t.onSymbol : t.buttonIdleLabel)
+                        .offset(y: 5)
                     }
                 }
                 .buttonStyle(.plain)
                 .disabled(model.busy || phase == .busy)
                 .onAppear { withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true } }
+                .animation(.easeInOut(duration: 0.5), value: phase)
                 Spacer()
                 statusBox
             }
@@ -111,17 +119,17 @@ struct MacMainView: View {
 
     private var statusBox: some View {
         VStack(alignment: .leading, spacing: 10) {
-            let stateColor: Color = phase == .on ? t.success : (phase == .trouble ? t.destructive : (phase == .off ? t.muted : t.warning))
-            let text = phase == .on ? "Системный прокси ведёт в сеть WYX" : (phase == .trouble ? "Узел не отвечает, ищу другой" : (phase == .checking ? "Прокси включён, проверяю связь" : (phase == .busy ? "Секунду…" : "Не подключено")))
+            let stateColor: Color = phase == .on ? t.dotOk : (phase == .trouble ? t.dotBad : (phase == .off ? t.dotIdle : t.dotBusy))
+            let text = phase == .on ? (model.settings.macTun ? "Трафик идёт через сеть WYX" : "Системный прокси ведёт в сеть WYX") : (phase == .trouble ? "Узел не отвечает, ищу другой" : (phase == .checking ? "Прокси включён, проверяю связь" : (phase == .busy ? "Секунду…" : "Не подключено")))
             HStack(spacing: 8) {
-                Circle().fill(stateColor).frame(width: 8, height: 8).shadow(color: stateColor.opacity(0.8), radius: 5)
-                Text(text).font(.subheadline.weight(.medium)).foregroundStyle(t.text)
+                Circle().fill(stateColor).frame(width: 8, height: 8).shadow(color: stateColor.opacity(0.9), radius: 5)
+                Text(text).font(.system(size: 13, weight: .medium)).foregroundStyle(t.text)
             }
             if model.isActive {
-                HStack {
-                    metric("Узел", model.status.nodeName ?? "—")
-                    metric("Задержка", model.status.lastProbeMs.map { "\($0) мс" } ?? "…")
-                    metric("Переключений", "\(model.status.switches)")
+                HStack(alignment: .top, spacing: 12) {
+                    metric("Узел", model.status.nodeName ?? "—").frame(maxWidth: .infinity, alignment: .leading)
+                    metric("Задержка", model.status.lastProbeMs.map { "\($0) мс" } ?? "…").fixedSize()
+                    metric("Переключений", "\(model.status.switches)").fixedSize()
                 }
                 if let e = model.status.lastError, model.status.failures > 0 { Text(e).font(.caption).foregroundStyle(t.destructive).lineLimit(2) }
             } else {
@@ -140,8 +148,8 @@ struct MacMainView: View {
 
     private func metric(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption2).foregroundStyle(t.muted)
-            Text(value).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(t.text).lineLimit(1)
+            Text(label).font(.system(size: 11)).foregroundStyle(t.muted)
+            Text(value).font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(t.text).lineLimit(1).truncationMode(.tail)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }

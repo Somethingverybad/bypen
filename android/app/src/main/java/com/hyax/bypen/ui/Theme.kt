@@ -1,4 +1,4 @@
-// Темы «Мята» из мессенджера WYX (sux-chat-app/src/themes/builtin.ts): тёмная по умолчанию.
+// Палитра из макета Figma «vopoen» (16.11.2026): тёмная «Мята» по умолчанию, светлая — в настройках.
 package com.hyax.bypen.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -9,23 +9,56 @@ import androidx.compose.ui.graphics.Color
 
 data class Theme(
     val dark: Boolean,
-    val background: Color, val surface: Color, val surface2: Color, val border: Color,
-    val text: Color, val muted: Color,
-    val primary: Color, val primaryForeground: Color, val primaryDeep: Color, val accent: Color,
-    val destructive: Color, val success: Color, val warning: Color,
+    val background: Color, val backgroundEnd: Color,
+    val text: Color, val muted: Color, val subtitle: Color, val footnote: Color,
+    val primary: Color, val primaryForeground: Color, val accent: Color,
+    val destructive: Color, val warning: Color,
+    val headerButton: Color, val headerSymbol: Color,
+    val cardStart: Color, val cardEnd: Color, val cardBorder: Color,
+    val settingsCardStart: Color, val settingsCardEnd: Color, val settingsCardBorder: Color,
+    val divider: Color, val toggleOn: Color, val toggleOff: Color, val toggleKnob: Color,
+    val dotIdle: Color, val dotOk: Color, val dotBad: Color, val dotBusy: Color,
+    val buttonIdleStart: Color, val buttonIdleEnd: Color, val buttonIdleBorder: Color, val buttonIdleSymbol: Color,
+    val buttonOnStart: Color, val buttonOnEnd: Color,
 ) {
+    /** Символ и подпись на диске «защищено» — #2F5B53 в обеих темах. */
+    val onSymbol: Color get() = Color(0xFF2F5B53)
+    // совместимость со старыми местами
+    val surface: Color get() = settingsCardStart
+    val surface2: Color get() = settingsCardEnd
+    val border: Color get() = settingsCardBorder
+    val success: Color get() = dotOk
+
     companion object {
+        private val lime = Color(0xFFC7F964)
+        private val deep = Color(0xFF2F5B53)
         val mintDark = Theme(
-            true, Color(0xFF222B27), Color(0xFF2C3832), Color(0xFF37453D), Color(0xFF4C5F3A),
-            Color.White, Color(0xFF9AA59E),
-            Color(0xFFC7F964), Color(0xFF2F5B53), Color(0xFF9FCB45), Color(0xFFC7F964),
-            Color(0xFFFF6B5E), Color(0xFF6FCF7B), Color(0xFFFFB10A),
+            dark = true,
+            background = Color(0xFF222B27), backgroundEnd = Color(0xFF222B27),
+            text = Color.White, muted = Color(0xFFBDBDBD), subtitle = Color(0xFFBDBDBD), footnote = Color(0xFFBDBDBD),
+            primary = lime, primaryForeground = deep, accent = lime,
+            destructive = Color(0xFFC65A52), warning = Color(0xFFFBB104),
+            headerButton = lime, headerSymbol = deep,
+            cardStart = Color(0xB3323D39), cardEnd = Color(0xB33F524E), cardBorder = Color(0xFFC4C4C4),
+            settingsCardStart = Color(0xFF222B27), settingsCardEnd = Color(0xFF2D392B), settingsCardBorder = lime.copy(alpha = 0.3f),
+            divider = lime.copy(alpha = 0.15f), toggleOn = lime, toggleOff = Color(0xFF5D645C), toggleKnob = Color(0xFF222B27),
+            dotIdle = Color(0xFF97A29C), dotOk = Color(0xFF489D8E), dotBad = Color(0xFFC65A52), dotBusy = Color(0xFFFBB104),
+            buttonIdleStart = Color(0xFF464D45), buttonIdleEnd = Color(0xFF37403D), buttonIdleBorder = Color(0xFFC4C4C4), buttonIdleSymbol = Color.White,
+            buttonOnStart = lime, buttonOnEnd = lime,
         )
         val mintLight = Theme(
-            false, Color(0xFFF4F8F1), Color.White, Color(0xFFEEF4EA), Color(0xFFE1E8DC),
-            Color(0xFF23463F), Color(0xFF6F7A74),
-            Color(0xFF2F5B53), Color.White, Color(0xFF24473F), Color(0xFFC7F964),
-            Color(0xFFD64545), Color(0xFF3E8E41), Color(0xFFB8860B),
+            dark = false,
+            background = Color.White, backgroundEnd = Color(0xFFE6EFDF),
+            text = deep, muted = Color(0xFF878787), subtitle = Color(0xFF9CB2AB), footnote = Color(0xFFA2A2A2),
+            primary = deep, primaryForeground = Color.White, accent = lime,
+            destructive = Color(0xFFC65A52), warning = Color(0xFFE09A00),
+            headerButton = Color.White, headerSymbol = deep,
+            cardStart = Color.White, cardEnd = Color(0xFFE4E4E4), cardBorder = Color.White,
+            settingsCardStart = Color.White, settingsCardEnd = Color.White, settingsCardBorder = Color.White,
+            divider = Color(0xFFD9D9D9), toggleOn = deep, toggleOff = Color(0xFFD9D9D9), toggleKnob = Color.White,
+            dotIdle = Color(0xFF97A29C), dotOk = Color(0xFF489D8E), dotBad = Color(0xFFC65A52), dotBusy = Color(0xFFFBB104),
+            buttonIdleStart = lime.copy(alpha = 0.61f), buttonIdleEnd = Color(0xFF489D8E).copy(alpha = 0.61f), buttonIdleBorder = Color.Transparent, buttonIdleSymbol = deep,
+            buttonOnStart = lime, buttonOnEnd = Color(0xFF489D8E),
         )
         fun named(id: String) = if (id == "light") mintLight else mintDark
     }
@@ -34,11 +67,11 @@ data class Theme(
 @Composable
 fun BypenMaterial(t: Theme, content: @Composable () -> Unit) {
     val scheme = if (t.dark) darkColorScheme(
-        primary = t.primary, onPrimary = t.primaryForeground, background = t.background, onBackground = t.text,
-        surface = t.surface, onSurface = t.text, surfaceVariant = t.surface2, onSurfaceVariant = t.muted, outline = t.border, error = t.destructive,
+        primary = t.accent, onPrimary = t.primaryForeground, background = t.background, onBackground = t.text,
+        surface = t.settingsCardStart, onSurface = t.text, surfaceVariant = t.settingsCardEnd, onSurfaceVariant = t.muted, outline = t.settingsCardBorder, error = t.destructive,
     ) else lightColorScheme(
         primary = t.primary, onPrimary = t.primaryForeground, background = t.background, onBackground = t.text,
-        surface = t.surface, onSurface = t.text, surfaceVariant = t.surface2, onSurfaceVariant = t.muted, outline = t.border, error = t.destructive,
+        surface = Color.White, onSurface = t.text, surfaceVariant = Color(0xFFF2F5F0), onSurfaceVariant = t.muted, outline = t.divider, error = t.destructive,
     )
     MaterialTheme(colorScheme = scheme, content = content)
 }

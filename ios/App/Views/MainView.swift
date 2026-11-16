@@ -1,7 +1,9 @@
 import NetworkExtension
 import SwiftUI
 
-/// Главный экран: одна большая кнопка и поле состояния. Узлы и прочее — в настройках.
+/// Главный экран по макету: шапка «WYX / сеть» с двумя лаймовыми кнопками, большая круглая кнопка
+/// (в покое — графит с рамкой и символом питания; проверка — тот же диск со свечением и кольцами;
+/// защищено — сплошной лайм с широким свечением и щитом), внизу карточка состояния с тремя колонками.
 struct MainView: View {
     @EnvironmentObject var model: AppModel
     private var t: Theme { model.theme }
@@ -27,7 +29,8 @@ struct MainView: View {
         }
         .preferredColorScheme(t.scheme)
         .sheet(isPresented: $showLog) { LogView() }
-        .sheet(isPresented: $showSettings) { SettingsView() }
+        .sheet(isPresented: $showSettings) { SettingsView().presentationDragIndicator(.visible) }
+        .onAppear { if ProcessInfo.processInfo.environment["BYPEN_PREVIEW_SETTINGS"] != nil { showSettings = true } }
         .onChange(of: phase) { _, p in
             if p == .on, lastPhase != .on { Haptic.success() }
             if p == .trouble, lastPhase != .trouble { Haptic.warning() }
@@ -39,9 +42,9 @@ struct MainView: View {
         HStack {
             GlassIconButton(t: t, system: "doc.text") { showLog = true }
             Spacer()
-            VStack(spacing: 0) {
-                Text("WYX").font(.system(size: 22, weight: .heavy)).tracking(-1).foregroundStyle(t.text)
-                Text("сеть").font(.caption).foregroundStyle(t.muted)
+            VStack(spacing: 4) {
+                Text("WYX").font(.system(size: 27, weight: .semibold)).foregroundStyle(t.text)
+                Text("сеть").font(.system(size: 12)).foregroundStyle(t.subtitle)
             }
             Spacer()
             GlassIconButton(t: t, system: "gearshape") { showSettings = true }
@@ -74,21 +77,12 @@ struct MainView: View {
         }
     }
 
-    private var glow: Color {
+    private var symbol: BigButtonSymbol.Kind {
         switch phase {
-        case .off: return t.accent.opacity(0.0)
-        case .busy, .checking: return t.accent.opacity(0.35)
-        case .on: return t.accent
-        case .trouble: return t.destructive
-        }
-    }
-
-    private var icon: String {
-        switch phase {
-        case .on: return "checkmark.shield.fill"
-        case .trouble: return "exclamationmark.shield"
-        case .checking, .busy: return "shield.lefthalf.filled"
-        case .off: return "power"
+        case .on: return .checkShield
+        case .trouble: return .warnShield
+        case .checking, .busy: return .halfShield
+        case .off: return .power
         }
     }
 
@@ -97,6 +91,7 @@ struct MainView: View {
     private var bigButton: some View {
         let on = phase == .on
         let working = phase == .busy || phase == .checking
+        let size: CGFloat = 227
         return Button {
             Haptic.tap()
             Task {
@@ -104,49 +99,37 @@ struct MainView: View {
             }
         } label: {
             ZStack {
-                // свечение
-                Circle().fill(glow.opacity(0.55))
-                    .frame(width: 250, height: 250)
-                    .blur(radius: 40)
-                    .scaleEffect(on ? (breathe ? 1.08 : 0.96) : 1)
-                    .opacity(phase == .off ? 0 : 1)
-                // кольца при работе
+                // кольца «на воде» при проверке (Ellipse 5 макета: 800 px, лайм 25 %)
                 ForEach(0..<2, id: \.self) { i in
-                    Circle().strokeBorder(t.accent.opacity(working ? 0.35 : 0), lineWidth: 1.5)
-                        .frame(width: 250, height: 250)
-                        .scaleEffect(pulse ? 1.25 + CGFloat(i) * 0.12 : 0.95)
-                        .opacity(pulse ? 0 : 0.8)
-                        .animation(.easeOut(duration: 1.8).repeatForever(autoreverses: false).delay(Double(i) * 0.6), value: pulse)
+                    Circle().strokeBorder(t.accent.opacity(working ? 0.25 : 0), lineWidth: 1)
+                        .frame(width: size, height: size)
+                        .scaleEffect(pulse ? 1.22 + CGFloat(i) * 0.1 : 1.0)
+                        .opacity(pulse ? 0 : 1)
+                        .animation(.easeOut(duration: 2.2).repeatForever(autoreverses: false).delay(Double(i) * 0.8), value: pulse)
                 }
-                // стеклянный диск
+                // диск: покой — графит (тёмная) или лайм→бирюза 61 % (светлая); проверка — то же, прозрачнее в тёмной,
+                // со свечением 100 px; защищено — сплошной лайм (тёмная) или лайм→бирюза (светлая) со свечением 243 px
                 Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 236, height: 236)
-                    .overlay(
-                        Circle().fill(
-                            on
-                            ? LinearGradient(colors: [t.accent, t.primaryDeep], startPoint: .topLeading, endPoint: .bottomTrailing)
-                            : LinearGradient(colors: [Color.white.opacity(t.scheme == .dark ? 0.10 : 0.6), Color.white.opacity(0.0)], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        )
+                    .fill(
+                        on
+                        ? LinearGradient(colors: [t.buttonOnStart, t.buttonOnEnd], startPoint: UnitPoint(x: 0.2, y: 0.1), endPoint: UnitPoint(x: 0.8, y: 0.95))
+                        : LinearGradient(colors: [t.buttonIdleStart.opacity(working && t.scheme == .dark ? 0.85 : 1), t.buttonIdleEnd.opacity(working && t.scheme == .dark ? 0.85 : 1)],
+                                         startPoint: UnitPoint(x: 0.2, y: 0.1), endPoint: UnitPoint(x: 0.8, y: 0.95))
                     )
-                    .overlay(
-                        // блик сверху
-                        Circle().strokeBorder(
-                            LinearGradient(colors: [Color.white.opacity(t.scheme == .dark ? 0.55 : 0.95), Color.white.opacity(0.05)], startPoint: .top, endPoint: .bottom),
-                            lineWidth: 1.5)
-                    )
-                    .shadow(color: glow.opacity(on ? 0.45 : 0.2), radius: 28, y: 14)
-                    .shadow(color: t.background.opacity(0.7), radius: 16, y: 8)
-                VStack(spacing: 10) {
-                    Image(systemName: icon)
-                        .font(.system(size: 54, weight: .semibold))
-                        .contentTransition(.symbolEffect(.replace))
-                        .symbolEffect(.pulse, options: .repeating, isActive: working)
+                    .frame(width: size, height: size)
+                    .overlay(Circle().strokeBorder(on ? .clear : t.buttonIdleBorder, lineWidth: 1))
+                    .shadow(color: on ? t.accent.opacity(t.scheme == .dark ? 0.47 : 0.8) : (working ? t.accent.opacity(t.scheme == .dark ? 0.48 : 0.7) : .clear), radius: on ? 60 : 33)
+                    .shadow(color: on ? t.accent.opacity(0.35) : .clear, radius: 30)
+                    .scaleEffect(on ? (breathe ? 1.015 : 1) : 1)
+                VStack(spacing: 14) {
+                    BigButtonSymbol(kind: symbol, t: t)
+                        .scaleEffect(working && breathe ? 1.06 : 1)
                     Text(title)
-                        .font(.title3.weight(.semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .contentTransition(.opacity)
                 }
-                .foregroundStyle(on ? t.primaryForeground : t.text)
+                .foregroundStyle(on ? t.onSymbol : t.buttonIdleLabel)
+                .offset(y: 6)
             }
             .scaleEffect(pressed ? 0.96 : 1)
         }
@@ -165,10 +148,10 @@ struct MainView: View {
 
     private var stateColor: Color {
         switch phase {
-        case .on: return t.success
-        case .trouble: return t.destructive
-        case .off: return t.muted
-        default: return t.warning
+        case .on: return t.dotOk
+        case .trouble: return t.dotBad
+        case .off: return t.dotIdle
+        default: return t.dotBusy
         }
     }
 
@@ -183,48 +166,59 @@ struct MainView: View {
     }
 
     private var statusBox: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 13) {
                 Circle().fill(stateColor).frame(width: 9, height: 9)
-                    .shadow(color: stateColor.opacity(0.8), radius: 6)
-                Text(stateText).font(.subheadline.weight(.medium)).foregroundStyle(t.text)
+                    .shadow(color: stateColor.opacity(0.9), radius: 5)
+                Text(stateText).font(.system(size: 14, weight: .medium)).foregroundStyle(t.text)
                     .contentTransition(.opacity)
                 Spacer()
             }
             if model.tunnel.isActive {
-                HStack(spacing: 0) {
-                    metric("Узел", model.status.nodeName ?? "—")
-                    metric("Задержка", model.status.lastProbeMs.map { "\($0) мс" } ?? "…")
-                    metric("Трафик", "↑\(bytes(model.status.up)) ↓\(bytes(model.status.down))")
-                }
+                // колонки макета: 0 / 41 % / 72 % ширины
+                columns([0.41, 0.31, 0.28], [
+                    ("Узел", model.status.nodeName ?? "—"),
+                    ("Задержка", model.status.lastProbeMs.map { "\($0) мс" } ?? "…"),
+                    ("Трафик", "↑\(bytes(model.status.up)) ↓\(bytes(model.status.down))"),
+                ])
                 if let e = model.status.lastError, model.status.failures > 0 {
                     Text(e).font(.caption).foregroundStyle(t.destructive).lineLimit(2)
                 }
             } else {
-                HStack(spacing: 0) {
-                    metric("Аккаунт", model.username.map { "@\($0)" } ?? "—")
-                    metric("Узлов", model.profile.map { "\($0.nodes.filter(\.ok).count) из \($0.nodes.count)" } ?? "—")
-                    metric("Выбор", model.settings.preferredNode.flatMap { id in model.profile?.nodes.first { $0.id == id }?.name } ?? "авто")
-                }
+                // колонки макета: 0 / 41 % / 78 % ширины
+                columns([0.41, 0.37, 0.22], [
+                    ("Аккаунт", model.username.map { "@\($0)" } ?? "—"),
+                    ("Узлов", model.profile.map { "\($0.nodes.filter(\.ok).count) из \($0.nodes.count)" } ?? "—"),
+                    ("Выбор", model.settings.preferredNode.flatMap { id in model.profile?.nodes.first { $0.id == id }?.name } ?? "авто"),
+                ])
             }
             if let note = model.profileNote { warn(note) }
             if let e = model.error { warn(e) }
         }
-        .padding(18)
+        .padding(.horizontal, 18).padding(.vertical, 17)
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(t)
         .onTapGesture { showLog = true }
         .animation(.easeInOut(duration: 0.3), value: model.status)
     }
 
-    private func metric(_ label: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.caption2).foregroundStyle(t.muted)
-            Text(value).font(.footnote.weight(.semibold).monospacedDigit()).foregroundStyle(t.text)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .contentTransition(.numericText())
+    /// Три колонки по долям ширины карточки (как в макете); длинное значение режется многоточием.
+    private func columns(_ fractions: [CGFloat], _ items: [(String, String)]) -> some View {
+        GeometryReader { geo in
+            HStack(alignment: .top, spacing: 0) {
+                ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.0).font(.system(size: 12)).foregroundStyle(t.muted)
+                        Text(item.1).font(.system(size: 12, weight: .medium).monospacedDigit()).foregroundStyle(t.text)
+                            .lineLimit(1).truncationMode(.tail)
+                            .contentTransition(.numericText())
+                    }
+                    .padding(.trailing, 8)
+                    .frame(width: geo.size.width * fractions[i], alignment: .leading)
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 34)
     }
 
     private func warn(_ text: String) -> some View {

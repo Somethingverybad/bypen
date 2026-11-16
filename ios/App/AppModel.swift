@@ -27,9 +27,29 @@ final class AppModel: ObservableObject {
         log.tag = "app"
         await tunnel.load()
         startPolling()
+        if let mode = ProcessInfo.processInfo.environment["BYPEN_PREVIEW"] { applyPreview(mode); return }
         guard loggedIn else { return }
         await refreshProfile(force: false)
         await uploadEvents()
+    }
+
+    static let preview = ProcessInfo.processInfo.environment["BYPEN_PREVIEW"] != nil
+
+    /// Только для скриншотов в симуляторе: BYPEN_PREVIEW=off|checking|on подменяет состояние без сети.
+    private func applyPreview(_ mode: String) {
+        let json = """
+        {"v":1,"issued_at":"2026-11-16T00:00:00Z","ttl":600,"user":{"id":"1","username":"varivari","uuid":"1fc88e7f-0000-0000-0000-000000000000","email":""},
+         "nodes":[{"id":"a","name":"Москва → NL • Reality","kind":"reality","host":"1.1.1.1","port":443,"sni":"x","weight":1,"ok":true,"rtt_ms":114,"checked_at":null},
+                  {"id":"b","name":"Москва → NL • XHTTP","kind":"xhttp","host":"1.1.1.1","port":443,"sni":"x","weight":1,"ok":true,"rtt_ms":189,"checked_at":null},
+                  {"id":"c","name":"NL напрямую • Reality","kind":"reality","host":"1.1.1.1","port":443,"sni":"x","weight":1,"ok":false,"rtt_ms":null,"checked_at":null}]}
+        """
+        profile = try? VpnProfile.decode(json)
+        username = "varivari"; loggedIn = true
+        pollTask?.cancel()
+        guard mode != "off" else { return }
+        tunnel.vpnStatus = .connected
+        status = TunnelStatus(state: .connected, nodeId: "a", nodeName: "Москва → NL • Reality", since: Date(), up: 9 * 1024, down: 18 * 1024,
+                              lastProbeMs: mode == "on" ? 238 : nil, failures: 0, switches: 0, xrayVersion: "26.11.9")
     }
 
     // MARK: вход
@@ -61,6 +81,7 @@ final class AppModel: ObservableObject {
     // MARK: профиль
 
     func refreshProfile(force: Bool) async {
+        if Self.preview { return }
         guard loggedIn else { return }
         if !force, let p = profile, Date().timeIntervalSince(lastProfileFetch) < Double(p.ttl) { return }
         do {
@@ -138,6 +159,7 @@ final class AppModel: ObservableObject {
 
     /// Отправить накопленные расширением события и подрезать файл.
     func uploadEvents() async {
+        if Self.preview { return }
         guard loggedIn, let data = try? Data(contentsOf: AppGroup.eventsURL), !data.isEmpty else { return }
         let consumed = data.count
         let lines = data.split(separator: 0x0A)
