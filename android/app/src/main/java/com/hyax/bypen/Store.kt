@@ -20,7 +20,7 @@ object Store {
 
 data class TunnelSettings(
     val autoSwitch: Boolean = true,
-    val rotateIdle: Boolean = false,
+    val rotateIdle: Boolean = true,
     val rotateMinutes: Int = 60,
     val preferredNode: String? = null,
     val appearance: String = "dark",
@@ -28,12 +28,13 @@ data class TunnelSettings(
     fun save() = Store.prefs.edit()
         .putBoolean("autoSwitch", autoSwitch).putBoolean("rotateIdle", rotateIdle)
         .putInt("rotateMinutes", rotateMinutes).putString("preferredNode", preferredNode)
-        .putString("appearance", appearance).apply()
+        .putString("appearance", appearance).putInt("settingsV", 2).apply()
 
     companion object {
         fun load(): TunnelSettings = Store.prefs.let {
             TunnelSettings(
-                it.getBoolean("autoSwitch", true), it.getBoolean("rotateIdle", false),
+                // до версии 2 выключенная ротация была просто прежним значением по умолчанию — включаем один раз
+                it.getBoolean("autoSwitch", true), if (it.getInt("settingsV", 1) < 2) true else it.getBoolean("rotateIdle", true),
                 it.getInt("rotateMinutes", 60), it.getString("preferredNode", null),
                 it.getString("appearance", "dark") ?: "dark",
             )

@@ -32,19 +32,24 @@ struct TunnelSettings: Codable, Equatable {
     /// Переключаться на другой узел, когда текущий перестал отвечать.
     var autoSwitch = true
     /// В простое менять узел, чтобы трафик не шёл всё время в одну точку.
-    var rotateIdle = false
+    var rotateIdle = true
     /// Не раньше чем через столько минут на одном узле.
     var rotateMinutes = 60
     /// Узел, выбранный вручную (nil — автоматически, живые первыми).
     var preferredNode: String?
     /// Мак: вместо системного прокси поднимать TUN (весь трафик, нужен пароль администратора).
     var macTun = false
+    /// Версия формата: 2 — «менять узел в простое» включено по умолчанию (17.11.2026).
+    var v = 2
 
     init() {}
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         autoSwitch = try c.decodeIfPresent(Bool.self, forKey: .autoSwitch) ?? true
-        rotateIdle = try c.decodeIfPresent(Bool.self, forKey: .rotateIdle) ?? false
+        // Файлы до версии 2 хранили выключенную ротацию просто как прежнее значение по умолчанию —
+        // включаем один раз; после этого выбор пользователя сохраняется.
+        let version = try c.decodeIfPresent(Int.self, forKey: .v) ?? 1
+        rotateIdle = version < 2 ? true : (try c.decodeIfPresent(Bool.self, forKey: .rotateIdle) ?? true)
         rotateMinutes = try c.decodeIfPresent(Int.self, forKey: .rotateMinutes) ?? 60
         preferredNode = try c.decodeIfPresent(String.self, forKey: .preferredNode)
         macTun = try c.decodeIfPresent(Bool.self, forKey: .macTun) ?? false
