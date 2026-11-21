@@ -108,6 +108,7 @@ struct MacMainView: View {
                 .onAppear { withAnimation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true)) { breathe = true } }
                 .animation(.easeInOut(duration: 0.5), value: phase)
                 Spacer()
+                if model.update != nil || model.updateError != nil { MacUpdateCard().environmentObject(model) }
                 statusBox
             }
             .padding(20)
@@ -215,9 +216,52 @@ struct MacSettingsView: View {
             Section("О приложении") {
                 LabeledContent("Версия", value: API.version)
                 LabeledContent("Ядро Xray", value: model.status.xrayVersion ?? "—")
+                if let u = model.update {
+                    LabeledContent("Есть обновление", value: "\(u.version) (\(u.build))")
+                    Button(model.updating ? "Обновляю…" : "Обновить и перезапустить") { Task { await model.installUpdate() } }
+                        .disabled(model.updating)
+                } else {
+                    Button("Проверить обновления") { Task { await model.checkUpdate(manual: true) } }
+                    if let d = model.updateChecked {
+                        Text("Последняя версия · проверено \(d.formatted(date: .omitted, time: .shortened))").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let e = model.updateError { Text(e).font(.caption).foregroundStyle(.red) }
             }
         }
         .formStyle(.grouped).frame(width: 440, height: 520)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
+    }
+}
+
+
+/// Карточка «Есть обновление» над полем состояния.
+struct MacUpdateCard: View {
+    @EnvironmentObject var model: MacModel
+    private var t: Theme { model.theme }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let u = model.update {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.down.circle.fill").font(.system(size: 18)).foregroundStyle(t.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Есть обновление \(u.version)").font(.system(size: 13, weight: .medium)).foregroundStyle(t.text)
+                        if let n = u.notes, !n.isEmpty { Text(n).font(.system(size: 11)).foregroundStyle(t.muted).lineLimit(2) }
+                    }
+                    Spacer(minLength: 6)
+                    Button { Task { await model.installUpdate() } } label: {
+                        Text(model.updating ? "\(Int(model.updateProgress * 100))%" : "Обновить")
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.horizontal, 12).padding(.vertical, 6)
+                            .background(t.scheme == .dark ? t.accent : t.text, in: Capsule())
+                            .foregroundStyle(t.scheme == .dark ? t.primaryForeground : .white)
+                    }
+                    .buttonStyle(.plain).disabled(model.updating)
+                }
+                if model.updating { ProgressView(value: model.updateProgress).tint(t.accent) }
+            }
+            if let e = model.updateError { Text(e).font(.system(size: 11)).foregroundStyle(t.destructive) }
+        }
+        .padding(12).frame(maxWidth: .infinity, alignment: .leading).settingsCard(t, radius: 16)
     }
 }

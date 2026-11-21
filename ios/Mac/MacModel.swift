@@ -12,6 +12,13 @@ final class MacModel: ObservableObject {
     @Published var status = TunnelStatus()
     @Published var busy = false
     @Published var error: String?
+    // самообновление
+    @Published var update: MacUpdateInfo?
+    @Published var updating = false
+    @Published var updateProgress = 0.0
+    @Published var updateError: String?
+    @Published var updateChecked: Date?
+    private var updateLoopStarted = false
     @AppStorage("appearance") var appearance = "dark"
     var theme: Theme { Theme.named(appearance) }
     let engine = MacEngine()
@@ -25,9 +32,58 @@ final class MacModel: ObservableObject {
     init() {
         log.tag = "mac"
         engine.onStatus = { [weak self] s in self?.status = s }
+        MacUpdater.cleanupOld()
+        // после обновления — подключиться снова, если перед ним VPN был включён
+        if UserDefaults.standard.bool(forKey: MacUpdater.reconnectKey) {
+            UserDefaults.standard.removeObject(forKey: MacUpdater.reconnectKey)
+            if loggedIn { Task { await self.connect() } }
+        }
+    }
+
+    // MARK: обновления
+
+    /// При запуске и раз в 6 часов; окно может открываться много раз — цикл один.
+    func startUpdateLoop() {
+        guard !updateLoopStarted else { return }
+        updateLoopStarted = true
+        Task {
+            while true {
+                await checkUpdate(manual: false)
+                try? await Task.sleep(nanoseconds: 6 * 3600 * 1_000_000_000)
+            }
+        }
+    }
+
+    func checkUpdate(manual: Bool) async {
+        do {
+            let u = try await MacUpdater.check()
+            update = u; updateChecked = Date()
+            if manual { updateError = nil }
+            if let u { log.log("есть обновление \(u.version) (\(u.build))") }
+            // только для проверки обновлятеля: поставить сразу, без кнопки
+            if u != nil, ProcessInfo.processInfo.environment["BYPEN_TEST_AUTOUPDATE"] != nil { await installUpdate() }
+        } catch {
+            if manual { updateError = "Не удалось проверить: \(error.localizedDescription)" }
+        }
+    }
+
+    func installUpdate() async {
+        guard let u = update, !updating else { return }
+        updating = true; updateError = nil; updateProgress = 0
+        let wasActive = isActive
+        do {
+            try await MacUpdater.install(u) { p in Task { @MainActor in self.updateProgress = p } }
+            if wasActive { UserDefaults.standard.set(true, forKey: MacUpdater.reconnectKey) }
+            MacUpdater.relaunch()   // выход снимает прокси или TUN, новая версия подключится сама
+        } catch {
+            updating = false
+            updateError = error.localizedDescription
+            log.log("обновление не поставлено: \(error.localizedDescription)")
+        }
     }
 
     func bootstrap() async {
+        startUpdateLoop()
         guard loggedIn else { return }
         await refreshProfile(force: false)
         await uploadEvents()

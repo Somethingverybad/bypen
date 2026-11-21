@@ -70,6 +70,11 @@ struct MenuBarContent: View {
                 }
             }
         }
+        if let u = model.update {
+            Divider()
+            Button(model.updating ? "Обновляю…" : "Обновить до \(u.version)") { Task { await model.installUpdate() } }
+                .disabled(model.updating)
+        }
         Divider()
         Button("Открыть Бупень") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
         Button("Выйти из приложения") { NSApp.terminate(nil) }
