@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Бупень
+Comment=Клиент сети WYX
+Exec=bypen
+Icon=bypen
+Terminal=false
+Categories=Network;
+StartupWMClass=Bypen

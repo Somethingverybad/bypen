@@ -137,7 +137,6 @@ targets:
       - App/Signature.swift
       - App/Views/Theme.swift
       - App/Views/Glass.swift
-      - path: App/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hyax.bypen.mac

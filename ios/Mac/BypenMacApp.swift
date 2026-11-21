@@ -6,6 +6,13 @@ struct BypenMacApp: App {
     @StateObject private var model = MacModel()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
+    private let menuIcon: NSImage = {
+        let image = NSImage(named: "MenuBarIcon") ?? NSImage()
+        image.isTemplate = false
+        image.size = NSSize(width: 22, height: 22)
+        return image
+    }()
+
     var body: some Scene {
         Window("Бупень", id: "main") {
             MacRoot()
@@ -19,7 +26,9 @@ struct BypenMacApp: App {
         MenuBarExtra {
             MenuBarContent().environmentObject(model)
         } label: {
-            Image(systemName: model.isActive ? (model.status.lastProbeMs != nil && model.status.failures == 0 ? "checkmark.shield.fill" : "shield.lefthalf.filled") : "shield.slash")
+            Image(nsImage: menuIcon)
+                .renderingMode(.original)
+                .accessibilityLabel("Бупень")
         }
     }
 }
