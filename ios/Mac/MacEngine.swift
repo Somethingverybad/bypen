@@ -24,6 +24,7 @@ final class MacEngine {
     private var samples: [(Date, Int)] = []
     private var bytesUp = 0, bytesDown = 0
     private var tunMode = false
+    private var directIface: String?
 
     var isRunning: Bool { running }
 
@@ -44,20 +45,24 @@ final class MacEngine {
             }
             self.profile = p
             self.settings = TunnelSettings.load()
+            self.tunMode = self.settings.macTun
+            self.directIface = self.tunMode ? SystemProxy.defaultInterface() : nil
             self.running = true
             self.status = TunnelStatus(state: .starting, xrayVersion: ver)
             guard let node = self.startFirstAvailable(order: p.order(preferred: preferred ?? self.settings.preferredNode)) else {
                 self.fail("Ни один узел не запустился"); return
             }
-            self.tunMode = self.settings.macTun
+            let direct = p.directList
             if self.tunMode {
-                if let err = MacTun.up(socksPort: XrayConfig.socksPort, exclude: node.dialIPs) {
+                // узел и адреса WYX — мимо туннеля маршрутами через шлюз
+                let wyx = direct.parsedCIDRs.map { ($0.prefix == ($0.v6 ? 128 : 32)) ? $0.addr : "\($0.addr)/\($0.prefix)" }
+                if let err = MacTun.up(socksPort: XrayConfig.socksPort, exclude: node.dialIPs + wyx) {
                     self.log.log("TUN не поднялся: \(err)")
                     XrayCore.stop(); self.fail("TUN не поднялся: \(err)"); return
                 }
                 self.log.log("TUN поднят (весь трафик через туннель), узел исключён: \(node.dialIPs.joined(separator: ", "))")
             } else {
-                if let err = SystemProxy.enable(socksPort: XrayConfig.socksPort, httpPort: XrayConfig.httpPort) {
+                if let err = SystemProxy.enable(socksPort: XrayConfig.socksPort, httpPort: XrayConfig.httpPort, direct: direct) {
                     self.log.log("системный прокси не включился: \(err)")
                     XrayCore.stop(); self.fail("Не удалось включить системный прокси: \(err)"); return
                 }
@@ -101,7 +106,7 @@ final class MacEngine {
     private func startFirstAvailable(order: [VpnNode]) -> VpnNode? {
         guard let p = profile else { return nil }
         for node in order {
-            if let err = XrayCore.run(configJSON: XrayConfig.build(node: node, uuid: p.user.uuid, withHTTP: true)) {
+            if let err = XrayCore.run(configJSON: XrayConfig.build(node: node, uuid: p.user.uuid, withHTTP: true, direct: p.directList, directInterface: directIface)) {
                 log.log("узел \(node.name): ядро не запустилось — \(err)")
                 VpnEvent(node: node.id, ok: false, error: "start: \(err.prefix(150))", net: "mac").append()
                 XrayCore.stop(); continue
@@ -145,7 +150,7 @@ final class MacEngine {
         if let cur, !reason.contains("команде"), !reason.contains("ротация") { failedRecently[cur.id] = Date() }
         XrayCore.stop()
         for next in candidates {
-            if let err = XrayCore.run(configJSON: XrayConfig.build(node: next, uuid: p.user.uuid, withHTTP: true)) {
+            if let err = XrayCore.run(configJSON: XrayConfig.build(node: next, uuid: p.user.uuid, withHTTP: true, direct: p.directList, directInterface: directIface)) {
                 log.log("узел \(next.name): ядро не запустилось — \(err)"); failedRecently[next.id] = Date(); XrayCore.stop(); continue
             }
             if tunMode { MacTun.exclude(next.dialIPs) }
@@ -155,7 +160,7 @@ final class MacEngine {
             scheduleProbe(after: 1.5)
             return
         }
-        if let cur, XrayCore.run(configJSON: XrayConfig.build(node: cur, uuid: p.user.uuid, withHTTP: true)) == nil {
+        if let cur, XrayCore.run(configJSON: XrayConfig.build(node: cur, uuid: p.user.uuid, withHTTP: true, direct: p.directList, directInterface: directIface)) == nil {
             log.log("остаёмся на \(cur.name)"); became(cur)
         } else {
             status.state = .error; status.lastError = "Ни один узел не запустился"

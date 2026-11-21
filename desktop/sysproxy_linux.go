@@ -29,7 +29,7 @@ func kwrite() string {
 	return ""
 }
 
-func sysProxyEnable() error {
+func sysProxyEnable(direct DirectList) error {
 	var b linuxProxyBackup
 	applied := false
 	if _, err := exec.LookPath("gsettings"); err == nil {
@@ -39,7 +39,7 @@ func sysProxyEnable() error {
 				{"org.gnome.system.proxy.http", "host", "127.0.0.1"}, {"org.gnome.system.proxy.http", "port", "10809"},
 				{"org.gnome.system.proxy.https", "host", "127.0.0.1"}, {"org.gnome.system.proxy.https", "port", "10809"},
 				{"org.gnome.system.proxy.socks", "host", "127.0.0.1"}, {"org.gnome.system.proxy.socks", "port", "10808"},
-				{"org.gnome.system.proxy", "ignore-hosts", "['localhost', '127.0.0.0/8', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']"},
+				{"org.gnome.system.proxy", "ignore-hosts", gnomeIgnore(direct)},
 				{"org.gnome.system.proxy", "mode", "manual"},
 			}
 			ok := true
@@ -56,7 +56,7 @@ func sysProxyEnable() error {
 		if out, err := exec.Command(strings.Replace(kw, "kwriteconfig", "kreadconfig", 1), "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType").Output(); err == nil {
 			b.KdeType = strings.TrimSpace(string(out))
 		}
-		set := [][]string{{"ProxyType", "1"}, {"httpProxy", "http://127.0.0.1 10809"}, {"httpsProxy", "http://127.0.0.1 10809"}, {"socksProxy", "socks://127.0.0.1 10808"}, {"NoProxyFor", "localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"}}
+		set := [][]string{{"ProxyType", "1"}, {"httpProxy", "http://127.0.0.1 10809"}, {"httpsProxy", "http://127.0.0.1 10809"}, {"socksProxy", "socks://127.0.0.1 10808"}, {"NoProxyFor", "localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16," + strings.Join(direct.Domains, ",")}}
 		ok := true
 		for _, s := range set {
 			if exec.Command(kw, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", s[0], s[1]).Run() != nil {
@@ -103,4 +103,13 @@ func sysProxyDisable() error {
 func sysProxyLeftover() bool {
 	_, err := os.Stat(proxyBackupPath())
 	return err == nil
+}
+
+// WYX — мимо прокси: GNOME понимает «*.домен» и сам домен.
+func gnomeIgnore(d DirectList) string {
+	items := []string{"'localhost'", "'127.0.0.0/8'", "'::1'", "'10.0.0.0/8'", "'172.16.0.0/12'", "'192.168.0.0/16'"}
+	for _, x := range d.Domains {
+		items = append(items, "'"+x+"'", "'*."+x+"'")
+	}
+	return "[" + strings.Join(items, ", ") + "]"
 }

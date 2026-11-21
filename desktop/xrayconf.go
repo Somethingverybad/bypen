@@ -37,7 +37,7 @@ func tunName() string {
 	return "bypen0"
 }
 
-func buildXrayConfig(n VpnNode, uuid string, withHTTP, tun bool) string {
+func buildXrayConfig(n VpnNode, uuid string, withHTTP, tun bool, direct DirectList) string {
 	user := map[string]any{"id": uuid, "encryption": "none"}
 	if n.Flow != "" {
 		user["flow"] = n.Flow
@@ -116,12 +116,29 @@ func buildXrayConfig(n VpnNode, uuid string, withHTTP, tun bool) string {
 		},
 		"routing": map[string]any{
 			"domainStrategy": "AsIs",
-			"rules": []any{
+			"rules": append(directRules(direct),
 				map[string]any{"type": "field", "ip": privateNets, "outboundTag": "direct"},
 				map[string]any{"type": "field", "network": "tcp,udp", "outboundTag": "proxy"},
-			},
+			),
 		},
 	}
 	b, _ := json.Marshal(cfg)
 	return string(b)
+}
+
+// WYX — напрямую: по имени (SNI/Host, ядро подсматривает) и по адресам. В режиме TUN прямые
+// соединения ядра привязаны к физическому интерфейсу (autoOutboundsInterface) — в туннель не вернутся.
+func directRules(d DirectList) []any {
+	var rules []any
+	if len(d.Domains) > 0 {
+		doms := make([]string, len(d.Domains))
+		for i, x := range d.Domains {
+			doms[i] = "domain:" + x
+		}
+		rules = append(rules, map[string]any{"type": "field", "domain": doms, "outboundTag": "direct"})
+	}
+	if len(d.CIDRs) > 0 {
+		rules = append(rules, map[string]any{"type": "field", "ip": d.CIDRs, "outboundTag": "direct"})
+	}
+	return rules
 }

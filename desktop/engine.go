@@ -110,7 +110,7 @@ func (e *Engine) start(preferred *string) {
 		return
 	}
 	if !e.tun && os.Getenv("BYPEN_NO_SYSPROXY") == "" {
-		if err := sysProxyEnable(); err != nil {
+		if err := sysProxyEnable(e.profile.directList()); err != nil {
 			e.runner.Stop()
 			e.failLocked("Не удалось включить системный прокси: " + err.Error())
 			return
@@ -148,9 +148,9 @@ func (e *Engine) startFirstAvailable(order []VpnNode) *VpnNode {
 			e.mu.Unlock()
 			return nil
 		}
-		uuid, tun, r := e.profile.User.UUID, e.tun, e.runner
+		uuid, tun, r, direct := e.profile.User.UUID, e.tun, e.runner, e.profile.directList()
 		e.mu.Unlock()
-		if err := r.Run(buildXrayConfig(n, uuid, !tun, tun)); err != nil {
+		if err := r.Run(buildXrayConfig(n, uuid, !tun, tun, direct)); err != nil {
 			startErr = err.Error()
 			tlog.Log("узел %s: ядро не запустилось — %v", n.Name, err)
 			appendEvent(n.ID, false, nil, "start: "+trim(err.Error(), 150))
@@ -287,11 +287,11 @@ func (e *Engine) switchNode(id *string, reason string) {
 	if cur != nil && !strings.Contains(reason, "команде") && !strings.Contains(reason, "ротация") {
 		e.failedRecently[cur.ID] = time.Now()
 	}
-	uuid, tun, r := p.User.UUID, e.tun, e.runner
+	uuid, tun, r, direct := p.User.UUID, e.tun, e.runner, p.directList()
 	e.mu.Unlock()
 
 	for _, next := range candidates {
-		if err := r.Run(buildXrayConfig(next, uuid, !tun, tun)); err != nil {
+		if err := r.Run(buildXrayConfig(next, uuid, !tun, tun, direct)); err != nil {
 			tlog.Log("узел %s: ядро не запустилось — %v", next.Name, err)
 			e.mu.Lock()
 			e.failedRecently[next.ID] = time.Now()
@@ -317,7 +317,7 @@ func (e *Engine) switchNode(id *string, reason string) {
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if cur != nil && r.Run(buildXrayConfig(*cur, uuid, !tun, tun)) == nil {
+	if cur != nil && r.Run(buildXrayConfig(*cur, uuid, !tun, tun, direct)) == nil {
 		tlog.Log("остаёмся на %s", cur.Name)
 		e.becameLocked(*cur)
 	} else {

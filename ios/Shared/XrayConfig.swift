@@ -12,7 +12,10 @@ enum XrayConfig {
         "100.64.0.0/10", "224.0.0.0/4", "fc00::/7", "fe80::/10", "ff00::/8",
     ]
 
-    static func build(node: VpnNode, uuid: String, withHTTP: Bool = false) -> String {
+    /// direct — адреса WYX мимо узла; directInterface — к какому интерфейсу привязать прямые
+    /// соединения (мак в режиме TUN: иначе они уйдут в собственный туннель и закольцуются).
+    static func build(node: VpnNode, uuid: String, withHTTP: Bool = false,
+                      direct: DirectList = .builtin, directInterface: String? = nil) -> String {
         var user: [String: Any] = ["id": uuid, "encryption": "none"]
         if let flow = node.flow, !flow.isEmpty { user["flow"] = flow }
 
@@ -69,12 +72,12 @@ enum XrayConfig {
                     ]]],
                     "streamSettings": stream,
                 ],
-                ["tag": "direct", "protocol": "freedom"],
+                directOutbound(interface: directInterface),
                 ["tag": "block", "protocol": "blackhole"],
             ],
             "routing": [
                 "domainStrategy": "AsIs",
-                "rules": [
+                "rules": directRules(direct) + [
                     ["type": "field", "ip": privateNets, "outboundTag": "direct"],
                     ["type": "field", "network": "tcp,udp", "outboundTag": "proxy"],
                 ],
@@ -82,6 +85,20 @@ enum XrayConfig {
         ]
         let data = try! JSONSerialization.data(withJSONObject: cfg, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
+    }
+
+    static func directOutbound(interface: String?) -> [String: Any] {
+        var o: [String: Any] = ["tag": "direct", "protocol": "freedom"]
+        if let interface, !interface.isEmpty { o["streamSettings"] = ["sockopt": ["interface": interface]] }
+        return o
+    }
+
+    /// WYX — напрямую: по имени (SNI/Host, ядро его подсматривает) и по адресам.
+    static func directRules(_ d: DirectList) -> [[String: Any]] {
+        var rules: [[String: Any]] = []
+        if !d.domains.isEmpty { rules.append(["type": "field", "domain": d.domains.map { "domain:" + $0 }, "outboundTag": "direct"]) }
+        if !d.cidrs.isEmpty { rules.append(["type": "field", "ip": d.cidrs, "outboundTag": "direct"]) }
+        return rules
     }
 
     /// Конфигурация hev-socks5-tunnel (Tun2SocksKit): весь tun → socks 127.0.0.1:10808.

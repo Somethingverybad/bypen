@@ -118,15 +118,30 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         let s = NEPacketTunnelNetworkSettings(tunnelRemoteAddress: "198.18.0.254")
         let v4 = NEIPv4Settings(addresses: ["198.18.0.1"], subnetMasks: ["255.255.255.0"])
         v4.includedRoutes = [NEIPv4Route.default()]
-        s.ipv4Settings = v4
         let v6 = NEIPv6Settings(addresses: ["fd00:7779:7878::2"], networkPrefixLengths: [64])
         v6.includedRoutes = [NEIPv6Route.default()]
+        // WYX (сервер, сайт, хранилище) — мимо туннеля: телефон ходит туда сам, как без VPN.
+        // То, что не попало в адреса (CDN сменил IP), всё равно уйдёт напрямую правилом ядра по имени.
+        let direct = profile?.directList ?? .builtin
+        var ex4: [NEIPv4Route] = [], ex6: [NEIPv6Route] = []
+        for c in direct.parsedCIDRs {
+            if c.v6 { ex6.append(NEIPv6Route(destinationAddress: c.addr, networkPrefixLength: NSNumber(value: c.prefix))) }
+            else { ex4.append(NEIPv4Route(destinationAddress: c.addr, subnetMask: Self.mask(c.prefix))) }
+        }
+        v4.excludedRoutes = ex4
+        v6.excludedRoutes = ex6
+        s.ipv4Settings = v4
         s.ipv6Settings = v6
         let dns = NEDNSSettings(servers: ["1.1.1.1", "8.8.8.8"])
         dns.matchDomains = [""]
         s.dnsSettings = dns
         s.mtu = 9000
         return s
+    }
+
+    static func mask(_ prefix: Int) -> String {
+        let m: UInt32 = prefix == 0 ? 0 : ~UInt32(0) << UInt32(32 - prefix)
+        return "\((m >> 24) & 255).\((m >> 16) & 255).\((m >> 8) & 255).\(m & 255)"
     }
 
     private func observePath() {
@@ -150,7 +165,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
     private func startFirstAvailable() -> VpnNode? {
         guard let p = profile else { return nil }
         for node in order {
-            if let err = XrayCore.run(configJSON: XrayConfig.build(node: node, uuid: p.user.uuid)) {
+            if let err = XrayCore.run(configJSON: XrayConfig.build(node: node, uuid: p.user.uuid, direct: p.directList)) {
                 log.log("узел \(node.name): ядро не запустилось — \(err)")
                 VpnEvent(node: node.id, ok: false, error: "start: \(err.prefix(150))", net: netKind()).append()
                 XrayCore.stop()
@@ -222,7 +237,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
         if let cur { failedRecently[cur.id] = reason.contains("команде") || reason.contains("ротация") ? nil : Date() }
         XrayCore.stop()
         for next in candidates {
-            if let err = XrayCore.run(configJSON: XrayConfig.build(node: next, uuid: p.user.uuid)) {
+            if let err = XrayCore.run(configJSON: XrayConfig.build(node: next, uuid: p.user.uuid, direct: p.directList)) {
                 log.log("узел \(next.name): ядро не запустилось — \(err)")
                 failedRecently[next.id] = Date()
                 XrayCore.stop()
@@ -236,7 +251,7 @@ final class PacketTunnelProvider: NEPacketTunnelProvider {
             return
         }
         // никто не запустился — вернуть прежний
-        if let cur, XrayCore.run(configJSON: XrayConfig.build(node: cur, uuid: p.user.uuid)) == nil {
+        if let cur, XrayCore.run(configJSON: XrayConfig.build(node: cur, uuid: p.user.uuid, direct: p.directList)) == nil {
             log.log("остаёмся на \(cur.name): другие узлы не запустились")
             became(cur)
         } else {

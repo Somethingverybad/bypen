@@ -119,13 +119,21 @@ class BypenVpnService : VpnService() {
         status = TunnelStatus(state = State.STARTING, xrayVersion = ver); publish()
 
         val fd = try {
-            Builder().setSession("Бупень").setMtu(XrayConfig.TUN_MTU)
+            val b = Builder().setSession("Бупень").setMtu(XrayConfig.TUN_MTU)
                 .addAddress("198.18.0.1", 24).addAddress("fd00:7779:7878::2", 64)
                 .addRoute("0.0.0.0", 0).addRoute("::", 0)
                 .addDnsServer("1.1.1.1").addDnsServer("8.8.8.8")
                 .addDisallowedApplication(packageName)   // само приложение — мимо туннеля (отчёты и профиль дойдут всегда)
                 .setMetered(false).setBlocking(false)
-                .establish()
+            // WYX — мимо туннеля: приложение мессенджера целиком, адреса сервера и хранилищ (Android 13+).
+            // Остальное (браузер на hyax.ru, CDN с новым адресом) уйдёт напрямую правилом ядра по имени.
+            for (app in DirectList.APPS) try { b.addDisallowedApplication(app) } catch (e: Exception) { /* не установлено */ }
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                for ((addr, pref) in p.directList.parsed) try { b.excludeRoute(android.net.IpPrefix(addr, pref)) } catch (e: Exception) {
+                    TunnelLog.log("исключение $addr/$pref: ${e.message}")
+                }
+            }
+            b.establish()
         } catch (e: Exception) { TunnelLog.log("tun не поднялся: ${e.message}"); null }
         if (fd == null) { fail("Система не дала поднять VPN"); return }
         pfd = fd
@@ -177,7 +185,7 @@ class BypenVpnService : VpnService() {
     private fun startFirstAvailable(): VpnNode? {
         val p = profile ?: return null
         for (node in order) {
-            val err = XrayCore.run(XrayConfig.build(node, p.user.uuid))
+            val err = XrayCore.run(XrayConfig.build(node, p.user.uuid, p.directList))
             if (err != null) {
                 TunnelLog.log("узел ${node.name}: ядро не запустилось — $err")
                 Events.append(node.id, false, error = "start: ${err.take(150)}", net = netKind())
@@ -220,7 +228,7 @@ class BypenVpnService : VpnService() {
         if (cur != null && !reason.contains("команде") && !reason.contains("ротация")) failedRecently[cur.id] = System.currentTimeMillis()
         XrayCore.stop()
         for (next in candidates) {
-            val err = XrayCore.run(XrayConfig.build(next, p.user.uuid))
+            val err = XrayCore.run(XrayConfig.build(next, p.user.uuid, p.directList))
             if (err != null) { TunnelLog.log("узел ${next.name}: ядро не запустилось — $err"); failedRecently[next.id] = System.currentTimeMillis(); XrayCore.stop(); continue }
             TunnelLog.log("переключение: ${cur?.name ?: "—"} → ${next.name} ($reason)")
             status = status.copy(switches = status.switches + 1)
@@ -228,7 +236,7 @@ class BypenVpnService : VpnService() {
             scheduleProbe(1500)
             return
         }
-        if (cur != null && XrayCore.run(XrayConfig.build(cur, p.user.uuid)) == null) {
+        if (cur != null && XrayCore.run(XrayConfig.build(cur, p.user.uuid, p.directList)) == null) {
             TunnelLog.log("остаёмся на ${cur.name}: другие узлы не запустились"); became(cur)
         } else {
             status = status.copy(state = State.ERROR, lastError = "Ни один узел не запустился"); publish()

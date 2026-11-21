@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/netip"
 	"os"
+	"strings"
 )
 
 const (
@@ -57,12 +58,62 @@ type VpnUser struct {
 	Email    string `json:"email"`
 }
 
+// DirectList — куда ходить напрямую, мимо узла: сам WYX и его хранилища (они в России).
+// Приходит в подписанном профиле; встроенный список — на случай старого сервера.
+type DirectList struct {
+	Domains []string `json:"domains"`
+	CIDRs   []string `json:"cidrs"`
+}
+
+var builtinDirect = DirectList{
+	Domains: []string{"hyax.ru", "wyx.su", "huyax.e-tree.su", "storage.yandexcloud.net",
+		"43fb9b03-c74c-45ab-b258-7872345451b3.selcdn.net"},
+	CIDRs: []string{"194.164.245.144/32"},
+}
+
+func (d DirectList) merged(o *DirectList) DirectList {
+	if o == nil {
+		return d
+	}
+	seen := map[string]bool{}
+	uniq := func(a []string) []string {
+		var out []string
+		for _, x := range a {
+			k := strings.ToLower(strings.TrimSpace(x))
+			if k == "" || seen[k] {
+				continue
+			}
+			seen[k] = true
+			out = append(out, k)
+		}
+		return out
+	}
+	doms := uniq(append(append([]string{}, d.Domains...), o.Domains...))
+	seen = map[string]bool{}
+	var cidrs []string
+	for _, c := range uniq(append(append([]string{}, d.CIDRs...), o.CIDRs...)) {
+		if _, err := netip.ParsePrefix(c); err == nil {
+			cidrs = append(cidrs, c)
+		}
+	}
+	return DirectList{Domains: doms, CIDRs: cidrs}
+}
+
 type VpnProfile struct {
-	V        int       `json:"v"`
-	IssuedAt string    `json:"issued_at"`
-	TTL      int       `json:"ttl"`
-	User     VpnUser   `json:"user"`
-	Nodes    []VpnNode `json:"nodes"`
+	V        int         `json:"v"`
+	IssuedAt string      `json:"issued_at"`
+	TTL      int         `json:"ttl"`
+	User     VpnUser     `json:"user"`
+	Nodes    []VpnNode   `json:"nodes"`
+	Direct   *DirectList `json:"direct"`
+}
+
+// directList — встроенный список + с сервера.
+func (p *VpnProfile) directList() DirectList {
+	if p == nil {
+		return builtinDirect
+	}
+	return builtinDirect.merged(p.Direct)
 }
 
 func decodeProfile(payload string) (*VpnProfile, error) {

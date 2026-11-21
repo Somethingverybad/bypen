@@ -16,7 +16,7 @@ object XrayConfig {
     private fun obj(vararg pairs: Pair<String, Any?>) = JSONObject().apply { pairs.forEach { (k, v) -> put(k, v) } }
     private fun arr(vararg items: Any?) = JSONArray().apply { items.forEach { put(it) } }
 
-    fun build(node: VpnNode, uuid: String): String {
+    fun build(node: VpnNode, uuid: String, direct: DirectList = DirectList.BUILTIN): String {
         val user = obj("id" to uuid, "encryption" to "none")
         if (!node.flow.isNullOrEmpty()) user.put("flow", node.flow)
         val stream = if (node.isReality) obj(
@@ -50,10 +50,13 @@ object XrayConfig {
             ),
             "routing" to obj(
                 "domainStrategy" to "AsIs",
-                "rules" to arr(
-                    obj("type" to "field", "ip" to JSONArray(privateNets), "outboundTag" to "direct"),
-                    obj("type" to "field", "network" to "tcp,udp", "outboundTag" to "proxy"),
-                ),
+                "rules" to JSONArray().apply {
+                    // WYX — напрямую: по имени (SNI/Host, ядро подсматривает) и по адресам
+                    if (direct.domains.isNotEmpty()) put(obj("type" to "field", "domain" to JSONArray(direct.domains.map { "domain:$it" }), "outboundTag" to "direct"))
+                    if (direct.cidrs.isNotEmpty()) put(obj("type" to "field", "ip" to JSONArray(direct.cidrs), "outboundTag" to "direct"))
+                    put(obj("type" to "field", "ip" to JSONArray(privateNets), "outboundTag" to "direct"))
+                    put(obj("type" to "field", "network" to "tcp,udp", "outboundTag" to "proxy"))
+                },
             ),
         ).toString()
     }

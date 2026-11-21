@@ -13,13 +13,15 @@ enum SystemProxy {
     }
 
     /// Включить прокси на всех службах. Возвращает описание ошибки или nil.
-    static func enable(socksPort: Int, httpPort: Int) -> String? {
+    static func enable(socksPort: Int, httpPort: Int, direct: DirectList = .builtin) -> String? {
         var cmds: [[String]] = []
+        // WYX — мимо прокси: и домен, и все поддомены
+        let wyx = direct.domains.flatMap { [$0, "*." + $0] }
         for s in services() {
             cmds.append(["-setsocksfirewallproxy", s, "127.0.0.1", "\(socksPort)"])
             cmds.append(["-setwebproxy", s, "127.0.0.1", "\(httpPort)"])
             cmds.append(["-setsecurewebproxy", s, "127.0.0.1", "\(httpPort)"])
-            cmds.append(["-setproxybypassdomains", s, "localhost", "127.0.0.1", "*.local", "169.254/16", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
+            cmds.append(["-setproxybypassdomains", s, "localhost", "127.0.0.1", "*.local", "169.254/16", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"] + wyx)
         }
         return apply(cmds)
     }
@@ -38,6 +40,15 @@ enum SystemProxy {
         services().contains { run(tool, ["-getsocksfirewallproxy", $0]).out.contains("Enabled: Yes") }
     }
 
+
+    /// Интерфейс маршрута по умолчанию (en0, en1…): к нему привязываются прямые соединения
+    /// ядра в режиме TUN — наши маршруты 0/1 и 128/1 его не меняют.
+    static func defaultInterface() -> String? {
+        let r = run("/sbin/route", ["-n", "get", "default"])
+        guard r.code == 0, let line = r.out.split(separator: "\n").first(where: { $0.contains("interface:") }) else { return nil }
+        let iface = line.split(separator: ":").last.map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        return iface.isEmpty || iface.hasPrefix("utun") ? nil : iface
+    }
 
     /// Имя другого VPN, через который сейчас идёт весь трафик мака (маршрут по умолчанию — через utun).
     /// Внутри чужого туннеля наше соединение с узлом ломается (Reality получает настоящий сертификат), поэтому

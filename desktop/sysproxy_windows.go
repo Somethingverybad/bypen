@@ -20,7 +20,7 @@ type savedProxy struct {
 
 func proxyBackupPath() string { return pathIn("proxy-backup.json") }
 
-func sysProxyEnable() error {
+func sysProxyEnable(direct DirectList) error {
 	k, err := registry.OpenKey(registry.CURRENT_USER, inetKey, registry.QUERY_VALUE|registry.SET_VALUE)
 	if err != nil {
 		return err
@@ -38,7 +38,12 @@ func sysProxyEnable() error {
 	if err := k.SetStringValue("ProxyServer", "http=127.0.0.1:10809;https=127.0.0.1:10809;socks=127.0.0.1:10808"); err != nil {
 		return err
 	}
-	_ = k.SetStringValue("ProxyOverride", "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.2*;172.30.*;172.31.*;192.168.*;<local>")
+	// WYX — мимо прокси (домен и поддомены)
+	over := "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.2*;172.30.*;172.31.*;192.168.*"
+	for _, d := range direct.Domains {
+		over += ";" + d + ";*." + d
+	}
+	_ = k.SetStringValue("ProxyOverride", over+";<local>")
 	if err := k.SetDWordValue("ProxyEnable", 1); err != nil {
 		return err
 	}

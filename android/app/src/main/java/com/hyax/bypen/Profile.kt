@@ -29,7 +29,44 @@ data class VpnNode(
 
 data class VpnUser(val id: String, val username: String, val uuid: String, val email: String)
 
-data class VpnProfile(val issuedAt: String, val ttl: Int, val user: VpnUser, val nodes: List<VpnNode>) {
+/** Куда ходить напрямую, мимо узла: сам WYX и его хранилища (они в России). Приходит в подписанном
+ *  профиле; встроенный список — на случай старого сервера. */
+data class DirectList(val domains: List<String>, val cidrs: List<String>) {
+    fun merged(o: DirectList?): DirectList = if (o == null) this else
+        DirectList((domains + o.domains).distinctBy { it.lowercase() }, (cidrs + o.cidrs).distinct())
+
+    /** (адрес, длина префикса); кривые записи пропускаются. */
+    val parsed: List<Pair<java.net.InetAddress, Int>> get() = cidrs.mapNotNull { c ->
+        try {
+            val a = c.substringBefore("/")
+            if (!a.contains('.') && !a.contains(':')) return@mapNotNull null   // только адрес, не имя (без DNS)
+            val addr = java.net.InetAddress.getByName(a)
+            val max = if (addr is java.net.Inet6Address) 128 else 32
+            val pref = c.substringAfter("/", "$max").toIntOrNull() ?: max
+            if (pref in 0..max) addr to pref else null
+        } catch (e: Exception) { null }
+    }
+
+    companion object {
+        val BUILTIN = DirectList(
+            listOf("hyax.ru", "wyx.su", "huyax.e-tree.su", "storage.yandexcloud.net", "43fb9b03-c74c-45ab-b258-7872345451b3.selcdn.net"),
+            listOf("194.164.245.144/32"),
+        )
+        /** Приложение WYX целиком — мимо туннеля. */
+        val APPS = listOf("com.hyax.messenger")
+
+        fun from(o: JSONObject?): DirectList? {
+            if (o == null) return null
+            fun list(k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.optString(it) }.filter { it.isNotBlank() } } ?: emptyList()
+            return DirectList(list("domains"), list("cidrs"))
+        }
+    }
+}
+
+data class VpnProfile(val issuedAt: String, val ttl: Int, val user: VpnUser, val nodes: List<VpnNode>, val direct: DirectList? = null) {
+    /** Итоговый список «напрямую»: встроенный + с сервера. */
+    val directList: DirectList get() = DirectList.BUILTIN.merged(direct)
+
     /** Порядок попыток: выбранный вручную первым, дальше как отдал сервер (живые первыми). */
     fun order(preferred: String?): List<VpnNode> {
         val i = nodes.indexOfFirst { it.id == preferred }
@@ -46,6 +83,7 @@ data class VpnProfile(val issuedAt: String, val ttl: Int, val user: VpnUser, val
                 issuedAt = o.optString("issued_at"), ttl = o.optInt("ttl", 300),
                 user = VpnUser(u.getString("id"), u.getString("username"), u.getString("uuid"), u.optString("email")),
                 nodes = (0 until arr.length()).map { VpnNode.from(arr.getJSONObject(it)) },
+                direct = DirectList.from(o.optJSONObject("direct")),
             )
         }
 

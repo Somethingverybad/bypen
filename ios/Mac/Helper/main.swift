@@ -93,7 +93,8 @@ final class Net {
     func exclude(_ ips: [String]) {
         for ip in ips where !state.excluded.contains(ip) {
             let family = ip.contains(":") ? "-inet6" : "-inet"
-            var a = ["-n", "add", family, "-host", ip]
+            // «адрес/длина» — сеть (список «напрямую» с сервера), иначе один адрес
+            var a = ["-n", "add", family] + (ip.contains("/") ? ["-net", ip] : ["-host", ip])
             if ip.contains(":") { a += ["-interface", gatewayIface ?? "en0"] }
             else if let gw = gateway { a.append(gw) } else { a += ["-interface", gatewayIface ?? "en0"] }
             let (rc, out) = sh("/sbin/route", a)
@@ -140,7 +141,7 @@ final class Net {
     func down() {
         for net in ["0.0.0.0/1", "128.0.0.0/1"] { sh("/sbin/route", ["-n", "delete", "-inet", net, "-interface", iface]) }
         for net in ["::/1", "8000::/1"] { sh("/sbin/route", ["-n", "delete", "-inet6", net, "-interface", iface]) }
-        for ip in state.excluded { sh("/sbin/route", ["-n", "delete", ip.contains(":") ? "-inet6" : "-inet", "-host", ip]) }
+        for ip in state.excluded { sh("/sbin/route", ["-n", "delete", ip.contains(":") ? "-inet6" : "-inet"] + (ip.contains("/") ? ["-net", ip] : ["-host", ip])) }
         restoreDNS()
         state = SavedState()
         try? FileManager.default.removeItem(atPath: statePath)
