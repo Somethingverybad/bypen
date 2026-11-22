@@ -39,6 +39,48 @@ object Api {
         access = a; refresh = r; Api.username = username
     }
 
+    // Вход через бота в WYX (сервер: chat/bypen_login.py)
+
+    const val WYX_DOWNLOADS = "https://wyx.su/#download"
+    const val WYX_PACKAGE = "com.hyax.messenger"
+
+    data class BotLoginRequest(val id: String, val secret: String, val expiresIn: Int, val interval: Int, val bot: String)
+
+    /** Бот «Бупень» пишет человеку в WYX «Подтвердить вход?». */
+    suspend fun startBotLogin(username: String): BotLoginRequest {
+        val body = JSONObject().put("username", username)
+            .put("device_id", deviceId).put("device_name", "Бупень · ${Build.MANUFACTURER} ${Build.MODEL}")
+            .put("platform", "android").put("app_version", version)
+        val (code, obj) = send("vpn/login/start/", "POST", body, auth = false)
+        val id = obj?.optString("id", ""); val secret = obj?.optString("secret", "")
+        if (code != 200 || id.isNullOrEmpty() || secret.isNullOrEmpty()) throw ApiError(detail(obj) ?: "Не удалось отправить запрос ($code)")
+        return BotLoginRequest(id, secret, obj.optInt("expires_in", 300), obj.optInt("interval", 2).coerceAtLeast(1), obj.optString("bot", "Бупень"))
+    }
+
+    /** Ждать «Да» в WYX; отмена корутины прерывает. Сетевые сбои по пути — спрашиваем снова. */
+    suspend fun waitBotLogin(r: BotLoginRequest) {
+        val deadline = System.currentTimeMillis() + (r.expiresIn + 10) * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            kotlinx.coroutines.delay(r.interval * 1000L)
+            val (code, obj) = try {
+                send("vpn/login/poll/", "POST", JSONObject().put("id", r.id).put("secret", r.secret), auth = false)
+            } catch (e: ApiError) { continue }
+            if (code == 404) throw ApiError("Запрос устарел — попробуйте ещё раз")
+            if (code != 200) continue
+            when (obj?.optString("status")) {
+                "approved" -> {
+                    val a = obj.optString("access", ""); val rf = obj.optString("refresh", "")
+                    if (a.isEmpty() || rf.isEmpty()) throw ApiError("Запрос устарел — попробуйте ещё раз")
+                    access = a; refresh = rf; username = obj.optString("username", "")
+                    return
+                }
+                "denied" -> throw ApiError("Вход отклонён в WYX")
+                "expired", "used" -> throw ApiError("Запрос устарел — попробуйте ещё раз")
+            }
+        }
+        throw ApiError("Запрос устарел — попробуйте ещё раз")
+    }
+
     fun logout() { access = null; refresh = null; username = null }
 
     private suspend fun refreshTokens() {

@@ -65,6 +65,64 @@ final class API {
         self.username = username
     }
 
+    // MARK: вход через бота в WYX (сервер: chat/bypen_login.py)
+
+    /// Где скачать WYX — для тех, у кого нет аккаунта.
+    static let wyxDownloads = URL(string: "https://wyx.su/#download")!
+
+    struct BotLoginRequest { let id: String; let secret: String; let expiresIn: Int; let interval: Int; let bot: String }
+
+    enum BotLoginError: LocalizedError {
+        case denied, expired
+        var errorDescription: String? {
+            switch self {
+            case .denied: return "Вход отклонён в WYX"
+            case .expired: return "Запрос устарел — попробуйте ещё раз"
+            }
+        }
+    }
+
+    /// Бот «Бупень» пишет человеку в WYX «Подтвердить вход?».
+    func startBotLogin(username: String) async throws -> BotLoginRequest {
+        let body: [String: Any] = [
+            "username": username, "device_id": deviceId, "device_name": API.deviceName,
+            "platform": API.platform, "app_version": API.version,
+        ]
+        let (data, resp) = try await send(path: "vpn/login/start/", method: "POST", body: body, auth: false)
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard resp.statusCode == 200, let id = obj?["id"] as? String, let secret = obj?["secret"] as? String else {
+            throw APIError(message: API.detail(obj) ?? "Не удалось отправить запрос (\(resp.statusCode))")
+        }
+        return BotLoginRequest(id: id, secret: secret, expiresIn: obj?["expires_in"] as? Int ?? 300,
+                               interval: max(1, obj?["interval"] as? Int ?? 2), bot: obj?["bot"] as? String ?? "Бупень")
+    }
+
+    /// Ждать «Да» в WYX. Отмена задачи прерывает ожидание. Сетевые сбои по пути
+    /// не страшны — спрашиваем снова, пока запрос не устарел.
+    func waitBotLogin(_ r: BotLoginRequest) async throws {
+        let deadline = Date().addingTimeInterval(TimeInterval(r.expiresIn + 10))
+        while Date() < deadline {
+            try await Task.sleep(nanoseconds: UInt64(r.interval) * 1_000_000_000)
+            guard let (data, resp) = try? await send(path: "vpn/login/poll/", method: "POST",
+                                                      body: ["id": r.id, "secret": r.secret], auth: false) else { continue }
+            let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+            if resp.statusCode == 404 { throw BotLoginError.expired }
+            guard resp.statusCode == 200 else { continue }
+            switch obj?["status"] as? String {
+            case "approved":
+                guard let a = obj?["access"] as? String, let rf = obj?["refresh"] as? String else { throw BotLoginError.expired }
+                access = a
+                refresh = rf
+                username = obj?["username"] as? String
+                return
+            case "denied": throw BotLoginError.denied
+            case "expired", "used": throw BotLoginError.expired
+            default: continue
+            }
+        }
+        throw BotLoginError.expired
+    }
+
     func logout() {
         access = nil
         refresh = nil

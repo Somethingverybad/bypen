@@ -40,10 +40,15 @@ function render() {
   $("main").classList.toggle("hidden", !S.loggedIn);
   $("loginVer").textContent = "Бупень " + S.version + " · " + S.platform;
   if (!S.loggedIn) {
+    const waiting = !!S.awaitingBot;
+    $("loginForm").classList.toggle("hidden", waiting);
+    $("loginLinks").classList.toggle("hidden", waiting);
+    $("botWait").classList.toggle("hidden", !waiting);
+    if (waiting) $("botWaitText").textContent = "Бот «" + S.awaitingBot + "» прислал вам сообщение. Нажмите в нём «Да, это я» — на телефоне или в WYX на компьютере.";
     $("loginError").classList.toggle("hidden", !S.error);
     $("loginError").textContent = S.error || "";
     $("loginBtn").disabled = S.busy;
-    $("loginBtn").textContent = S.busy ? "Вхожу…" : "Войти";
+    $("loginBtn").textContent = S.busy ? "Отправляю…" : (withPassword ? "Войти" : "Войти через WYX");
     return;
   }
   const p = phase(S);
@@ -178,13 +183,28 @@ $("big").onclick = async () => {
   setTimeout(refresh, 150);
 };
 
+// Вход: ник → бот «Бупень» спрашивает в WYX → «Да». Пароль — мелкой ссылкой.
+let withPassword = false;
+$("pwToggle").onclick = () => {
+  withPassword = !withPassword;
+  $("p").classList.toggle("hidden", !withPassword);
+  $("loginHint").classList.toggle("hidden", withPassword);
+  $("pwToggle").textContent = withPassword ? "Войти через WYX" : "Войти паролем";
+  render();
+};
+$("noAccount").onclick = () => call("wyx/download", {}).catch(() => {});
+$("botCancel").onclick = async () => { try { await call("login/cancel", {}); } catch (_) {} refresh(); };
+
 $("loginForm").onsubmit = async (e) => {
   e.preventDefault();
   const u = $("u").value.trim(), p = $("p").value;
-  if (!u || !p) return;
+  if (!u || (withPassword && !p)) return;
   $("loginBtn").disabled = true;
-  $("loginBtn").textContent = "Вхожу…";
-  try { await call("login", { username: u, password: p }); } catch (_) {}
+  $("loginBtn").textContent = "Отправляю…";
+  try {
+    if (withPassword) await call("login", { username: u, password: p });
+    else await call("login/wyx", { username: u });
+  } catch (_) {}
   $("p").value = "";
   refresh();
 };

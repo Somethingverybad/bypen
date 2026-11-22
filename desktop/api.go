@@ -31,9 +31,9 @@ type authState struct {
 }
 
 type API struct {
-	mu    sync.Mutex
-	st    authState
-	http  *http.Client
+	mu   sync.Mutex
+	st   authState
+	http *http.Client
 }
 
 func newAPI() *API {
@@ -68,7 +68,7 @@ func (a *API) save() {
 	_ = os.WriteFile(statePath(), b, 0o600)
 }
 
-func (a *API) LoggedIn() bool { a.mu.Lock(); defer a.mu.Unlock(); return a.st.Refresh != "" }
+func (a *API) LoggedIn() bool   { a.mu.Lock(); defer a.mu.Unlock(); return a.st.Refresh != "" }
 func (a *API) Username() string { a.mu.Lock(); defer a.mu.Unlock(); return a.st.Username }
 
 func appTag() string { return platformTag() + " " + version }
@@ -94,6 +94,89 @@ func (a *API) Login(username, password string) error {
 	a.mu.Unlock()
 	return nil
 }
+
+// Вход через бота в WYX (сервер: chat/bypen_login.py).
+
+const wyxDownloads = "https://wyx.su/#download"
+
+type botLoginRequest struct {
+	ID, Secret, Bot     string
+	ExpiresIn, Interval int
+}
+
+var errBotDenied = &APIError{Msg: "Вход отклонён в WYX"}
+var errBotExpired = &APIError{Msg: "Запрос устарел — попробуйте ещё раз"}
+
+// StartBotLogin — бот «Бупень» пишет человеку в WYX «Подтвердить вход?».
+func (a *API) StartBotLogin(username string) (*botLoginRequest, error) {
+	body := map[string]any{
+		"username": username, "device_id": a.st.DeviceID, "device_name": deviceName(),
+		"platform": platformTag(), "app_version": version,
+	}
+	code, obj, err := a.send("vpn/login/start/", "POST", body, false)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := obj["id"].(string)
+	secret, _ := obj["secret"].(string)
+	if code != 200 || id == "" || secret == "" {
+		return nil, &APIError{Msg: detail(obj, fmt.Sprintf("Не удалось отправить запрос (%d)", code))}
+	}
+	r := &botLoginRequest{ID: id, Secret: secret, Bot: "Бупень", ExpiresIn: 300, Interval: 2}
+	if b, ok := obj["bot"].(string); ok && b != "" {
+		r.Bot = b
+	}
+	if v, ok := obj["expires_in"].(float64); ok && v > 0 {
+		r.ExpiresIn = int(v)
+	}
+	if v, ok := obj["interval"].(float64); ok && v >= 1 {
+		r.Interval = int(v)
+	}
+	return r, nil
+}
+
+// WaitBotLogin ждёт «Да» в WYX; закрытие cancel прерывает. Сбои сети по пути — спрашиваем снова.
+func (a *API) WaitBotLogin(r *botLoginRequest, cancel <-chan struct{}) error {
+	deadline := time.Now().Add(time.Duration(r.ExpiresIn+10) * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case <-cancel:
+			return errBotCancelled
+		case <-time.After(time.Duration(r.Interval) * time.Second):
+		}
+		code, obj, err := a.send("vpn/login/poll/", "POST", map[string]any{"id": r.ID, "secret": r.Secret}, false)
+		if err != nil {
+			continue
+		}
+		if code == 404 {
+			return errBotExpired
+		}
+		if code != 200 {
+			continue
+		}
+		switch obj["status"] {
+		case "approved":
+			acc, _ := obj["access"].(string)
+			ref, _ := obj["refresh"].(string)
+			user, _ := obj["username"].(string)
+			if acc == "" || ref == "" {
+				return errBotExpired
+			}
+			a.mu.Lock()
+			a.st.Access, a.st.Refresh, a.st.Username = acc, ref, user
+			a.save()
+			a.mu.Unlock()
+			return nil
+		case "denied":
+			return errBotDenied
+		case "expired", "used":
+			return errBotExpired
+		}
+	}
+	return errBotExpired
+}
+
+var errBotCancelled = errors.New("отменено")
 
 func (a *API) Logout() {
 	a.mu.Lock()

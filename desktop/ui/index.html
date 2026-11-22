@@ -14,12 +14,23 @@
 <section id="login" class="screen hidden">
   <div class="login-head"><div class="brand">WYX</div><div class="sub">сеть</div></div>
   <form id="loginForm" class="card settings-card login-card" autocomplete="on">
-    <input id="u" class="field" placeholder="Ник или почта" autocomplete="username" autocapitalize="off" spellcheck="false">
-    <input id="p" class="field" type="password" placeholder="Пароль" autocomplete="current-password">
+    <input id="u" class="field" placeholder="Ник в WYX" autocomplete="username" autocapitalize="off" spellcheck="false">
+    <input id="p" class="field hidden" type="password" placeholder="Пароль" autocomplete="current-password">
     <div id="loginError" class="error hidden"></div>
-    <button id="loginBtn" class="primary" type="submit">Войти</button>
+    <button id="loginBtn" class="primary" type="submit">Войти через WYX</button>
+    <p id="loginHint" class="hint center">Бот «Бупень» пришлёт в WYX запрос на вход — подтвердите его там.</p>
   </form>
-  <p class="hint center">Аккаунт тот же, что в мессенджере. Доступ к сети выдаётся автоматически.</p>
+  <div id="botWait" class="card settings-card login-card wait-card hidden">
+    <div class="wait-icon" aria-hidden="true">✈︎</div>
+    <div class="wait-title">Подтвердите вход в WYX</div>
+    <p class="hint center" id="botWaitText"></p>
+    <div class="spinner" aria-hidden="true"></div>
+    <button id="botCancel" class="link" type="button">Отмена</button>
+  </div>
+  <div id="loginLinks" class="login-links">
+    <button id="noAccount" class="link accent" type="button">Нет аккаунта WYX</button>
+    <button id="pwToggle" class="link" type="button">Войти паролем</button>
+  </div>
   <p class="ver center" id="loginVer"></p>
 </section>
 

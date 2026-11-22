@@ -14,9 +14,11 @@ import (
 
 const (
 	pinnedPublicKey = "mom4ETYn/8XuqZxbKEWEgk9DJcGK+l31/i4e9Bwc4Bw="
-	apiBase         = "https://hyax.ru/api"
 	updateBase      = "https://storage.yandexcloud.net/hyax-public/installers/bypen/"
 )
+
+// Переменная, а не константа: тесты подставляют свой сервер.
+var apiBase = "https://hyax.ru/api"
 
 type VpnNode struct {
 	ID        string   `json:"id"`

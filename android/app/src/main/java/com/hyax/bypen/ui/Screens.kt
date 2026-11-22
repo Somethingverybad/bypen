@@ -29,6 +29,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -93,34 +96,74 @@ import kotlinx.coroutines.delay
 fun LoginScreen(model: AppModel, t: Theme) {
     var u by remember { mutableStateOf("") }
     var p by remember { mutableStateOf("") }
+    var withPassword by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val canSubmit = u.isNotBlank() && (!withPassword || p.isNotBlank())
+    val submit = { if (canSubmit && !model.busy) { if (withPassword) model.login(u, p) else model.loginViaWYX(u) } }
     GlassBackground(t, false) {
         Column(Modifier.fillMaxSize().systemBarsPadding().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Text("WYX", color = t.text, fontSize = 48.sp, fontWeight = FontWeight.SemiBold)
             Text("сеть", color = t.subtitle, fontSize = 17.sp)
             Spacer(Modifier.height(24.dp))
-            Column(Modifier.fillMaxWidth().settingsCard(t, 24).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                val colors = OutlinedTextFieldDefaults.colors(
-                    focusedTextColor = t.text, unfocusedTextColor = t.text, cursorColor = if (t.dark) t.accent else t.primary,
-                    focusedBorderColor = if (t.dark) t.accent else t.primary, unfocusedBorderColor = if (t.dark) t.settingsCardBorder else t.divider,
-                    focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
-                    focusedPlaceholderColor = t.muted, unfocusedPlaceholderColor = t.muted,
-                )
-                OutlinedTextField(u, { u = it }, Modifier.fillMaxWidth(), placeholder = { Text("Ник или почта") }, singleLine = true, colors = colors, shape = RoundedCornerShape(16.dp))
-                OutlinedTextField(p, { p = it }, Modifier.fillMaxWidth(), placeholder = { Text("Пароль") }, singleLine = true, colors = colors, shape = RoundedCornerShape(16.dp),
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
-                model.error?.let { Text(it, color = t.destructive, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
-                Button(onClick = { model.login(u, p) }, enabled = u.isNotBlank() && p.isNotBlank() && !model.busy, modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = if (t.dark) t.accent else t.primary, contentColor = if (t.dark) t.primaryForeground else Color.White,
-                        disabledContainerColor = (if (t.dark) t.accent else t.primary).copy(alpha = 0.5f), disabledContentColor = (if (t.dark) t.primaryForeground else Color.White).copy(alpha = 0.7f))) {
-                    if (model.busy) CircularProgressIndicator(Modifier.size(18.dp), color = t.primaryForeground, strokeWidth = 2.dp)
-                    else Text("Войти", fontWeight = FontWeight.SemiBold)
+            val bot = model.awaitingBot
+            Column(Modifier.fillMaxWidth().settingsCard(t, 24).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                if (bot != null) {
+                    Icon(Icons.AutoMirrored.Filled.Send, null, tint = t.accent, modifier = Modifier.size(34.dp))
+                    Text("Подтвердите вход в WYX", color = t.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Бот «$bot» прислал вам сообщение. Нажмите в нём «Да, это я».", color = t.subtitle, fontSize = 15.sp, textAlign = TextAlign.Center)
+                    CircularProgressIndicator(Modifier.size(22.dp), color = t.accent, strokeWidth = 2.dp)
+                    PrimaryButton(t, "Открыть WYX", enabled = true, busy = false) {
+                        val i = ctx.packageManager.getLaunchIntentForPackage(Api.WYX_PACKAGE)
+                            ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse(Api.WYX_DOWNLOADS))
+                        try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                    }
+                    Text("Отмена", color = t.muted, fontSize = 15.sp, modifier = Modifier.clickable { model.cancelBotLogin() }.padding(6.dp))
+                } else {
+                    val colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = t.text, unfocusedTextColor = t.text, cursorColor = if (t.dark) t.accent else t.primary,
+                        focusedBorderColor = if (t.dark) t.accent else t.primary, unfocusedBorderColor = if (t.dark) t.settingsCardBorder else t.divider,
+                        focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent,
+                        focusedPlaceholderColor = t.muted, unfocusedPlaceholderColor = t.muted,
+                    )
+                    OutlinedTextField(u, { u = it }, Modifier.fillMaxWidth(), placeholder = { Text("Ник в WYX") }, singleLine = true, colors = colors, shape = RoundedCornerShape(16.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = if (withPassword) ImeAction.Next else ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { submit() }))
+                    if (withPassword) {
+                        OutlinedTextField(p, { p = it }, Modifier.fillMaxWidth(), placeholder = { Text("Пароль") }, singleLine = true, colors = colors, shape = RoundedCornerShape(16.dp),
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
+                            keyboardActions = KeyboardActions(onGo = { submit() }))
+                    }
+                    model.error?.let { Text(it, color = t.destructive, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
+                    PrimaryButton(t, if (withPassword) "Войти" else "Войти через WYX", enabled = canSubmit && !model.busy, busy = model.busy) { submit() }
+                    if (!withPassword) {
+                        Text("Бот «Бупень» пришлёт в WYX запрос на вход — подтвердите его там.", color = t.muted, fontSize = 13.sp, textAlign = TextAlign.Center)
+                    }
                 }
             }
-            Spacer(Modifier.height(16.dp))
-            Text("Аккаунт тот же, что в мессенджере. Доступ к сети выдаётся отдельно.", color = t.muted, fontSize = 13.sp, textAlign = TextAlign.Center)
+            if (bot == null) {
+                Spacer(Modifier.height(16.dp))
+                Text("Нет аккаунта WYX", color = t.accent, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable {
+                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(Api.WYX_DOWNLOADS)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                    }.padding(6.dp))
+                Text(if (withPassword) "Войти через WYX" else "Войти паролем", color = t.muted, fontSize = 13.sp,
+                    modifier = Modifier.clickable { withPassword = !withPassword; model.error = null }.padding(6.dp))
+            }
             Spacer(Modifier.height(32.dp))
             Text("Бупень ${Api.version}", color = t.muted.copy(alpha = 0.6f), fontSize = 11.sp)
         }
+    }
+}
+
+@Composable
+private fun PrimaryButton(t: Theme, title: String, enabled: Boolean, busy: Boolean, onClick: () -> Unit) {
+    Button(onClick = onClick, enabled = enabled, modifier = Modifier.fillMaxWidth().height(50.dp),
+        shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = if (t.dark) t.accent else t.primary, contentColor = if (t.dark) t.primaryForeground else Color.White,
+            disabledContainerColor = (if (t.dark) t.accent else t.primary).copy(alpha = 0.5f), disabledContentColor = (if (t.dark) t.primaryForeground else Color.White).copy(alpha = 0.7f))) {
+        if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = t.primaryForeground, strokeWidth = 2.dp)
+        else Text(title, fontWeight = FontWeight.SemiBold)
     }
 }
 

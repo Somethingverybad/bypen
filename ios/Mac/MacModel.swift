@@ -100,6 +100,36 @@ final class MacModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
+    /// Пока ждём «Да» в WYX — имя бота, который прислал запрос.
+    @Published var awaitingBot: String?
+    private var botTask: Task<Void, Never>?
+
+    /// Вход без пароля: бот «Бупень» спрашивает в WYX «Подтвердить вход?».
+    func loginViaWYX(username: String) {
+        botTask?.cancel()
+        let u = username.trimmingCharacters(in: .whitespaces)
+        botTask = Task { [weak self] in
+            guard let self else { return }
+            busy = true; error = nil
+            defer { busy = false; awaitingBot = nil }
+            do {
+                let r = try await API.shared.startBotLogin(username: u)
+                awaitingBot = r.bot
+                log.log("вход через WYX: запрос для \(u)")
+                try await API.shared.waitBotLogin(r)
+                self.username = API.shared.username; loggedIn = true
+                log.log("вход через WYX: подтверждён")
+                await refreshProfile(force: true)
+            } catch is CancellationError {
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
+    func cancelBotLogin() {
+        botTask?.cancel(); botTask = nil
+        awaitingBot = nil; busy = false
+    }
+
     func logout() {
         if isActive { engine.stop(reason: "выход") }
         API.shared.logout()

@@ -29,6 +29,8 @@ type App struct {
 	lastProfileFetch time.Time
 	update           *UpdateInfo
 	quit             chan struct{}
+	awaitingBot      string        // ждём «Да» в WYX — имя бота
+	botCancel        chan struct{} // закрыть — прервать ожидание
 }
 
 func newApp() *App {
@@ -74,6 +76,59 @@ func (a *App) Login(u, p string) error {
 	tlog.Log("вход: %s", strings.TrimSpace(u))
 	a.refreshProfile(true)
 	return nil
+}
+
+// LoginViaWYX — вход без пароля: бот «Бупень» спрашивает в WYX «Подтвердить вход?».
+func (a *App) LoginViaWYX(u string) {
+	u = strings.TrimSpace(u)
+	a.CancelBotLogin()
+	cancel := make(chan struct{})
+	a.mu.Lock()
+	a.busy, a.lastErr, a.botCancel = true, "", cancel
+	a.mu.Unlock()
+	go func() {
+		defer func() {
+			a.mu.Lock()
+			if a.botCancel == cancel {
+				a.busy, a.awaitingBot, a.botCancel = false, "", nil
+			}
+			a.mu.Unlock()
+		}()
+		r, err := a.api.StartBotLogin(u)
+		a.mu.Lock()
+		current := a.botCancel == cancel
+		if current && err == nil {
+			a.awaitingBot = r.Bot
+		}
+		a.mu.Unlock()
+		if !current {
+			return
+		}
+		if err != nil {
+			a.setErr(err.Error())
+			return
+		}
+		tlog.Log("вход через WYX: запрос для %s", u)
+		if err := a.api.WaitBotLogin(r, cancel); err != nil {
+			if err != errBotCancelled {
+				a.setErr(err.Error())
+			}
+			return
+		}
+		a.setErr("")
+		tlog.Log("вход через WYX: подтверждён")
+		a.refreshProfile(true)
+	}()
+}
+
+func (a *App) CancelBotLogin() {
+	a.mu.Lock()
+	if a.botCancel != nil {
+		close(a.botCancel)
+		a.botCancel = nil
+	}
+	a.busy, a.awaitingBot = false, ""
+	a.mu.Unlock()
 }
 
 func (a *App) Logout() {
@@ -236,12 +291,14 @@ type viewState struct {
 	Platform    string      `json:"platform"`
 	Xray        string      `json:"xray"`
 	Update      *UpdateInfo `json:"update,omitempty"`
+	AwaitingBot string      `json:"awaitingBot,omitempty"`
 }
 
 func (a *App) View() viewState {
 	a.mu.Lock()
 	v := viewState{LoggedIn: a.api.st.Refresh != "", Username: a.api.st.Username, Busy: a.busy, Error: a.lastErr,
-		ProfileNote: a.profileNote, Version: version, Platform: platformTag(), Xray: xrayVersion(), Update: a.update}
+		ProfileNote: a.profileNote, Version: version, Platform: platformTag(), Xray: xrayVersion(), Update: a.update,
+		AwaitingBot: a.awaitingBot}
 	if a.profile != nil {
 		v.Nodes = a.profile.Nodes
 		if len(a.profile.User.UUID) >= 8 {

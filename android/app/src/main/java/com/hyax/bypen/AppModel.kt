@@ -52,6 +52,31 @@ class AppModel : ViewModel() {
         } catch (e: Exception) { error = e.message } finally { busy = false }
     }
 
+    /** Пока ждём «Да» в WYX — имя бота, который прислал запрос. */
+    var awaitingBot by mutableStateOf<String?>(null)
+    private var botJob: kotlinx.coroutines.Job? = null
+
+    /** Вход без пароля: бот «Бупень» спрашивает в WYX «Подтвердить вход?». */
+    fun loginViaWYX(u: String) {
+        botJob?.cancel()
+        botJob = viewModelScope.launch {
+            busy = true; error = null
+            try {
+                val r = Api.startBotLogin(u.trim())
+                awaitingBot = r.bot
+                TunnelLog.log("вход через WYX: запрос для ${u.trim()}")
+                Api.waitBotLogin(r)
+                username = Api.username; loggedIn = true
+                TunnelLog.log("вход через WYX: подтверждён")
+                refreshProfile(true)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) { error = e.message } finally { busy = false; awaitingBot = null }
+        }
+    }
+
+    fun cancelBotLogin() { botJob?.cancel(); botJob = null; awaitingBot = null; busy = false }
+
     fun logout() {
         if (TunnelState.running) BypenVpnService.send(Store.ctx, BypenVpnService.ACTION_STOP)
         Api.logout(); Store.profileFile.delete()

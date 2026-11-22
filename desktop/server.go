@@ -83,6 +83,15 @@ func (s *uiServer) api(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		reply(map[string]any{"ok": true})
+	case "/api/login/wyx":
+		a.LoginViaWYX(body.Username)
+		reply(map[string]any{"ok": true})
+	case "/api/login/cancel":
+		a.CancelBotLogin()
+		reply(map[string]any{"ok": true})
+	case "/api/wyx/download":
+		openExternal(wyxDownloads)
+		reply(map[string]any{"ok": true})
 	case "/api/logout":
 		a.Logout()
 		reply(map[string]any{"ok": true})

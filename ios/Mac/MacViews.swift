@@ -12,32 +12,82 @@ struct MacLoginView: View {
     private var t: Theme { model.theme }
     @State private var username = ""
     @State private var password = ""
+    @State private var withPassword = false
     var body: some View {
         ZStack {
             GlassBackground(t: t, active: false)
             VStack(spacing: 20) {
                 Text("WYX").font(.system(size: 40, weight: .semibold)).foregroundStyle(t.text)
                 Text("сеть").font(.system(size: 15)).foregroundStyle(t.subtitle).padding(.top, -14)
-                VStack(spacing: 10) {
-                    TextField("Ник или почта", text: $username).textFieldStyle(.plain).themedField(t)
-                    SecureField("Пароль", text: $password).textFieldStyle(.plain).themedField(t)
-                    if let e = model.error { Text(e).font(.footnote).foregroundStyle(t.destructive).multilineTextAlignment(.center) }
-                    Button {
-                        Task { await model.login(username: username, password: password) }
-                    } label: {
-                        Text(model.busy ? "Вхожу…" : "Войти").font(.body.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .background(t.scheme == .dark ? t.accent : t.text, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(t.scheme == .dark ? t.primaryForeground : .white)
-                    }
-                    .buttonStyle(.plain).keyboardShortcut(.defaultAction)
-                    .disabled(username.isEmpty || password.isEmpty || model.busy)
+                Group {
+                    if let bot = model.awaitingBot { waiting(bot) } else { form }
                 }
                 .padding(18).glassCard(t, radius: 20)
-                Text("Аккаунт тот же, что в мессенджере.").font(.footnote).foregroundStyle(t.muted)
+                if model.awaitingBot == nil {
+                    Button("Нет аккаунта WYX") { NSWorkspace.shared.open(API.wyxDownloads) }
+                        .buttonStyle(.plain).font(.subheadline.weight(.medium)).foregroundStyle(t.accent)
+                    Button(withPassword ? "Войти через WYX" : "Войти паролем") { withPassword.toggle(); model.error = nil }
+                        .buttonStyle(.plain).font(.footnote).foregroundStyle(t.muted)
+                }
                 Text("Бупень \(API.version)").font(.caption2).foregroundStyle(t.muted.opacity(0.6))
             }
             .padding(28)
         }
         .preferredColorScheme(t.scheme)
+    }
+
+    private var form: some View {
+        VStack(spacing: 10) {
+            TextField("Ник в WYX", text: $username).textFieldStyle(.plain).themedField(t).onSubmit { submit() }
+            if withPassword {
+                SecureField("Пароль", text: $password).textFieldStyle(.plain).themedField(t).onSubmit { submit() }
+            }
+            if let e = model.error { Text(e).font(.footnote).foregroundStyle(t.destructive).multilineTextAlignment(.center) }
+            primary(model.busy ? "Отправляю…" : (withPassword ? "Войти" : "Войти через WYX")) { submit() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSubmit || model.busy)
+            if !withPassword {
+                Text("Бот «Бупень» пришлёт в WYX запрос на вход — подтвердите его там.")
+                    .font(.footnote).foregroundStyle(t.muted).multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private func waiting(_ bot: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "paperplane.fill").font(.system(size: 28)).foregroundStyle(t.accent)
+            Text("Подтвердите вход в WYX").font(.headline).foregroundStyle(t.text)
+            Text("Бот «\(bot)» прислал вам сообщение. Нажмите в нём «Да, это я» — на телефоне или здесь, в WYX.")
+                .font(.subheadline).foregroundStyle(t.subtitle).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            ProgressView().controlSize(.small)
+            if let wyx = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.hyax.messenger") {
+                primary("Открыть WYX") { NSWorkspace.shared.openApplication(at: wyx, configuration: .init()) }
+            }
+            Button("Отмена") { model.cancelBotLogin() }.buttonStyle(.plain).font(.subheadline).foregroundStyle(t.muted)
+        }
+    }
+
+    private var canSubmit: Bool {
+        !username.trimmingCharacters(in: .whitespaces).isEmpty && (!withPassword || !password.isEmpty)
+    }
+
+    private func submit() {
+        guard canSubmit, !model.busy else { return }
+        if withPassword {
+            Task { await model.login(username: username, password: password) }
+        } else {
+            model.loginViaWYX(username: username)
+        }
+    }
+
+    private func primary(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.body.weight(.semibold)).frame(maxWidth: .infinity).padding(.vertical, 10)
+                .background(t.scheme == .dark ? t.accent : t.text, in: RoundedRectangle(cornerRadius: 14))
+                .foregroundStyle(t.scheme == .dark ? t.primaryForeground : .white)
+        }
+        .buttonStyle(.plain)
     }
 }
 
