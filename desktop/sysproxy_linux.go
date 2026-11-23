@@ -56,7 +56,7 @@ func sysProxyEnable(direct DirectList) error {
 		if out, err := exec.Command(strings.Replace(kw, "kwriteconfig", "kreadconfig", 1), "--file", "kioslaverc", "--group", "Proxy Settings", "--key", "ProxyType").Output(); err == nil {
 			b.KdeType = strings.TrimSpace(string(out))
 		}
-		set := [][]string{{"ProxyType", "1"}, {"httpProxy", "http://127.0.0.1 10809"}, {"httpsProxy", "http://127.0.0.1 10809"}, {"socksProxy", "socks://127.0.0.1 10808"}, {"NoProxyFor", "localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16," + strings.Join(direct.Domains, ",")}}
+		set := [][]string{{"ProxyType", "1"}, {"httpProxy", "http://127.0.0.1 10809"}, {"httpsProxy", "http://127.0.0.1 10809"}, {"socksProxy", "socks://127.0.0.1 10808"}, {"NoProxyFor", "localhost,127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16," + strings.Join(direct.bypassHosts("."), ",")}}
 		ok := true
 		for _, s := range set {
 			if exec.Command(kw, "--file", "kioslaverc", "--group", "Proxy Settings", "--key", s[0], s[1]).Run() != nil {
@@ -108,8 +108,8 @@ func sysProxyLeftover() bool {
 // WYX — мимо прокси: GNOME понимает «*.домен» и сам домен.
 func gnomeIgnore(d DirectList) string {
 	items := []string{"'localhost'", "'127.0.0.0/8'", "'::1'", "'10.0.0.0/8'", "'172.16.0.0/12'", "'192.168.0.0/16'"}
-	for _, x := range d.Domains {
-		items = append(items, "'"+x+"'", "'*."+x+"'")
+	for _, x := range d.bypassHosts("*.") {
+		items = append(items, "'"+x+"'")
 	}
 	return "[" + strings.Join(items, ", ") + "]"
 }

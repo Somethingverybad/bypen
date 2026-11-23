@@ -178,6 +178,69 @@ func (a *API) WaitBotLogin(r *botLoginRequest, cancel <-chan struct{}) error {
 
 var errBotCancelled = errors.New("отменено")
 
+// Напрямую, мимо VPN — настройки в профиле WYX (сервер: chat/vpn.py VpnDirectView).
+type DirectSettings struct {
+	RU      bool     `json:"ru"`
+	Custom  []string `json:"custom"`
+	RUCount int      `json:"ruCount"`
+}
+
+func directFrom(obj map[string]any) *DirectSettings {
+	d := &DirectSettings{RU: true, Custom: []string{}}
+	if v, ok := obj["ru"].(bool); ok {
+		d.RU = v
+	}
+	if arr, ok := obj["custom"].([]any); ok {
+		for _, x := range arr {
+			if s, ok := x.(string); ok {
+				d.Custom = append(d.Custom, s)
+			}
+		}
+	}
+	if v, ok := obj["ru_count"].(float64); ok {
+		d.RUCount = int(v)
+	}
+	return d
+}
+
+// ShareDirect — отправить свои настройки «напрямую» человеку по логину WYX (бот спросит «Принять?»).
+func (a *API) ShareDirect(username string) (string, error) {
+	code, obj, err := a.authorized("vpn/direct/share/", "POST", map[string]any{"username": username})
+	if err != nil {
+		return "", err
+	}
+	if code != 200 {
+		return "", &APIError{Msg: detail(obj, fmt.Sprintf("Не отправилось (%d)", code))}
+	}
+	if u, ok := obj["username"].(string); ok && u != "" {
+		return u, nil
+	}
+	return username, nil
+}
+
+func (a *API) FetchDirect() (*DirectSettings, error) {
+	code, obj, err := a.authorized("vpn/direct/", "GET", nil)
+	if err != nil {
+		return nil, err
+	}
+	if code != 200 {
+		return nil, &APIError{Msg: detail(obj, fmt.Sprintf("Настройки не получены (%d)", code))}
+	}
+	return directFrom(obj), nil
+}
+
+// SaveDirect: в body — ru и/или custom.
+func (a *API) SaveDirect(body map[string]any) (*DirectSettings, error) {
+	code, obj, err := a.authorized("vpn/direct/", "PUT", body)
+	if err != nil {
+		return nil, err
+	}
+	if code != 200 {
+		return nil, &APIError{Msg: detail(obj, fmt.Sprintf("Не сохранилось (%d)", code))}
+	}
+	return directFrom(obj), nil
+}
+
 func (a *API) Logout() {
 	a.mu.Lock()
 	a.st.Access, a.st.Refresh, a.st.Username = "", "", ""

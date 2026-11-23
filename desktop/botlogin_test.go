@@ -75,3 +75,50 @@ func TestBotLoginDeniedAndCancel(t *testing.T) {
 		t.Fatal("после отказа вход не должен состояться")
 	}
 }
+
+// Настройки «напрямую»: чтение и сохранение в профиле WYX.
+func TestDirectSettingsRoundTrip(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	var saved map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/vpn/direct/" || r.Header.Get("Authorization") != "Bearer A" {
+			w.WriteHeader(404)
+			return
+		}
+		if r.Method == "PUT" {
+			_ = json.NewDecoder(r.Body).Decode(&saved)
+		}
+		_, _ = w.Write([]byte(`{"ru":false,"custom":["example.com","full:api.foo.io"],"ru_count":49}`))
+	}))
+	defer srv.Close()
+	apiBase = srv.URL + "/api"
+	a := newAPI()
+	a.st.Access, a.st.Refresh = "A", "R"
+	d, err := a.FetchDirect()
+	if err != nil || d.RU || d.RUCount != 49 || len(d.Custom) != 2 {
+		t.Fatalf("fetch: %v %+v", err, d)
+	}
+	if _, err := a.SaveDirect(map[string]any{"ru": false}); err != nil || saved["ru"] != false {
+		t.Fatalf("save: %v %v", err, saved)
+	}
+}
+
+func TestBypassHostsAndRules(t *testing.T) {
+	d := DirectList{Domains: []string{"ru", "example.com", "full:api.foo.io"}}
+	got := d.bypassHosts("*.")
+	want := []string{"ru", "*.ru", "example.com", "*.example.com", "api.foo.io"}
+	if len(got) != len(want) {
+		t.Fatalf("bypass: %v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("bypass: %v", got)
+		}
+	}
+	rules := directRules(d)
+	doms := rules[0].(map[string]any)["domain"].([]string)
+	if doms[0] != "domain:ru" || doms[2] != "full:api.foo.io" {
+		t.Fatalf("правила: %v", doms)
+	}
+}

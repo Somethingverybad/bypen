@@ -46,6 +46,8 @@ struct SettingsView: View {
                         }
                     }
 
+                    DirectSection(t: t)
+
                     SettingsSection(t: t, title: "Узел", footnote: "Выбранный узел становится первым; если он не отвечает, приложение всё равно уйдёт на другой",
                                     trailing: AnyView(Button { Task { await model.refreshProfile(force: true) } } label: { Image(systemName: "arrow.clockwise").font(.system(size: 13, weight: .medium)).foregroundStyle(t.muted) })) {
                         Button { model.settings.preferredNode = nil } label: {

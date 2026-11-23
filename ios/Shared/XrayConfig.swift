@@ -96,7 +96,7 @@ enum XrayConfig {
     /// WYX — напрямую: по имени (SNI/Host, ядро его подсматривает) и по адресам.
     static func directRules(_ d: DirectList) -> [[String: Any]] {
         var rules: [[String: Any]] = []
-        if !d.domains.isEmpty { rules.append(["type": "field", "domain": d.domains.map { "domain:" + $0 }, "outboundTag": "direct"]) }
+        if !d.domains.isEmpty { rules.append(["type": "field", "domain": d.xrayDomains, "outboundTag": "direct"]) }
         if !d.cidrs.isEmpty { rules.append(["type": "field", "ip": d.cidrs, "outboundTag": "direct"]) }
         return rules
     }

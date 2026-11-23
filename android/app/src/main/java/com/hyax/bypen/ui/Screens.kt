@@ -36,6 +36,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -401,6 +403,7 @@ fun SettingsScreen(model: AppModel, t: Theme, activity: MainActivity, onBack: ()
                         }
                     }
                 }
+                DirectSection(model, t)
                 Section(t, "Узел", "Выбранный узел становится первым; если он не отвечает, приложение всё равно уйдёт на другой") {
                     SRow(t, "Автоматически", onClick = { model.updateSettings(s.copy(preferredNode = null)) }) { if (s.preferredNode == null) CheckMark(t) }
                     model.profile?.nodes?.forEach { n ->
@@ -445,6 +448,72 @@ private fun SRow(t: Theme, title: String, color: Color = t.text, onClick: (() ->
         Text(title, color = color, fontSize = 14.sp, modifier = Modifier.weight(1f))
         trailing()
     }
+}
+
+/** «Напрямую, мимо VPN»: российские сайты (список сети WYX) и свои адреса. Хранится в профиле
+ *  WYX — одно на все устройства; после сохранения VPN переподключается. */
+@Composable
+private fun DirectSection(model: AppModel, t: Theme) {
+    var entry by remember { mutableStateOf("") }
+    var askShare by remember { mutableStateOf(false) }
+    var shareTo by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { model.loadDirect() }
+    val d = model.direct
+    val ru = d?.ru ?: true
+    val n = d?.ruCount ?: 0
+    val note = buildString {
+        model.directError?.let { append(it).append("\n") }
+        model.directNote?.let { append(it).append("\n") }
+        append("Российские — зоны .ru, .su, .рф")
+        if (n > 4) append(" и ещё ${n - 4} адресов из списка сети WYX")
+        append(". Свои: example.com — вместе с поддоменами, .ru — вся зона, =example.com — только этот адрес. Хранится в аккаунте WYX — действует на всех устройствах.")
+    }
+    Section(t, "Напрямую, мимо VPN", note) {
+        SRow(t, "Российские сайты", onClick = { if (!model.directSaving) model.saveDirect(ru = !ru) }) { MintToggle(t, ru) }
+        d?.custom?.forEach { e ->
+            SDivider(t)
+            SRow(t, directLabel(e)) {
+                Icon(Icons.Filled.Close, "Убрать", Modifier.size(20.dp).clickable { model.saveDirect(custom = d.custom - e) }, tint = t.muted)
+            }
+        }
+        SDivider(t)
+        Row(Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            val add = { val e = entry.trim(); if (e.isNotEmpty() && !model.directSaving) model.saveDirect(custom = (d?.custom ?: emptyList()) + e) { ok -> if (ok) entry = "" } }
+            androidx.compose.foundation.text.BasicTextField(entry, { entry = it }, Modifier.weight(1f).padding(vertical = 12.dp), singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = t.text, fontSize = 14.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(if (t.dark) t.accent else t.primary),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { add() }),
+                decorationBox = { inner -> if (entry.isEmpty()) Text("example.com, .ru или =точный.адрес", color = t.muted, fontSize = 14.sp); inner() })
+            if (model.directSaving) CircularProgressIndicator(Modifier.size(18.dp), color = t.accent, strokeWidth = 2.dp)
+            else IconButton(onClick = { add() }, enabled = entry.isNotBlank()) { Icon(Icons.Filled.Add, "Добавить", tint = if (t.dark) t.accent else t.text) }
+        }
+        SDivider(t)
+        SRow(t, "Поделиться по логину WYX", color = if (t.dark) t.accent else t.text, onClick = { shareTo = ""; askShare = true }) {
+            Icon(Icons.AutoMirrored.Filled.Send, null, Modifier.size(18.dp), tint = t.muted)
+        }
+    }
+    if (askShare) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askShare = false },
+            title = { Text("Поделиться настройками") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Бот «Бупень» пришлёт человеку ваши настройки — он сам решит, принять ли их.", fontSize = 14.sp)
+                    OutlinedTextField(shareTo, { shareTo = it }, placeholder = { Text("Ник в WYX") }, singleLine = true)
+                }
+            },
+            confirmButton = { androidx.compose.material3.TextButton({ askShare = false; model.shareDirect(shareTo) }, enabled = shareTo.isNotBlank()) { Text("Отправить") } },
+            dismissButton = { androidx.compose.material3.TextButton({ askShare = false }) { Text("Отмена") } },
+        )
+    }
+}
+
+/** «full:x» → «= x», зона без точки → «.ru», домен — как есть. */
+private fun directLabel(e: String) = when {
+    e.startsWith("full:") -> "= " + e.removePrefix("full:")
+    e.contains('.') -> e
+    else -> ".$e"
 }
 
 @Composable

@@ -168,3 +168,10 @@ button.link:hover { text-decoration: underline; }
 .wait-title { font-size: 18px; font-weight: 600; color: var(--text); }
 .spinner { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--accent-text); border-right-color: transparent; animation: spin .9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* напрямую, мимо VPN */
+.inline-field { border: 0; background: transparent; color: var(--text); font: inherit; font-size: 14px; outline: none; min-width: 0; }
+.inline-field::placeholder { color: var(--muted); }
+.tool.accent { color: var(--accent-text); }
+.sec-foot a { color: var(--accent-text); cursor: pointer; text-decoration: underline; }
+.sec-foot .danger { color: #ff8a80; }

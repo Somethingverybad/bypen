@@ -40,8 +40,8 @@ func sysProxyEnable(direct DirectList) error {
 	}
 	// WYX — мимо прокси (домен и поддомены)
 	over := "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.2*;172.30.*;172.31.*;192.168.*"
-	for _, d := range direct.Domains {
-		over += ";" + d + ";*." + d
+	for _, d := range direct.bypassHosts("*.") {
+		over += ";" + d
 	}
 	_ = k.SetStringValue("ProxyOverride", over+";<local>")
 	if err := k.SetDWordValue("ProxyEnable", 1); err != nil {

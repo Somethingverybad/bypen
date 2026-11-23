@@ -52,7 +52,7 @@ object XrayConfig {
                 "domainStrategy" to "AsIs",
                 "rules" to JSONArray().apply {
                     // WYX — напрямую: по имени (SNI/Host, ядро подсматривает) и по адресам
-                    if (direct.domains.isNotEmpty()) put(obj("type" to "field", "domain" to JSONArray(direct.domains.map { "domain:$it" }), "outboundTag" to "direct"))
+                    if (direct.domains.isNotEmpty()) put(obj("type" to "field", "domain" to JSONArray(direct.domains.map { if (it.startsWith("full:")) it else "domain:$it" }), "outboundTag" to "direct"))
                     if (direct.cidrs.isNotEmpty()) put(obj("type" to "field", "ip" to JSONArray(direct.cidrs), "outboundTag" to "direct"))
                     put(obj("type" to "field", "ip" to JSONArray(privateNets), "outboundTag" to "direct"))
                     put(obj("type" to "field", "network" to "tcp,udp", "outboundTag" to "proxy"))

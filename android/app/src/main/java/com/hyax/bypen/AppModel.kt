@@ -75,6 +75,44 @@ class AppModel : ViewModel() {
         }
     }
 
+    // Напрямую, мимо VPN (хранится в профиле WYX — одно на все устройства)
+    var direct by mutableStateOf<Api.DirectSettings?>(null)
+    var directError by mutableStateOf<String?>(null)
+    var directSaving by mutableStateOf(false)
+
+    /** Последний итог «Поделиться» — показывается под секцией. */
+    var directNote by mutableStateOf<String?>(null)
+
+    fun shareDirect(username: String) = viewModelScope.launch {
+        val u = username.trim().trimStart('@')
+        if (u.isEmpty()) return@launch
+        try {
+            val name = Api.shareDirect(u)
+            directNote = "Отправлено @$name — бот «Бупень» спросит, принять ли настройки"; directError = null
+        } catch (e: Exception) { directError = e.message }
+    }
+
+    fun loadDirect() = viewModelScope.launch {
+        try { direct = Api.fetchDirect(); directError = null } catch (e: Exception) { directError = e.message }
+    }
+
+    /** Сохранить, перечитать профиль и, если VPN включён, переподключить — иначе правила не применятся. */
+    fun saveDirect(ru: Boolean? = null, custom: List<String>? = null, onDone: (Boolean) -> Unit = {}) = viewModelScope.launch {
+        directSaving = true
+        try {
+            direct = Api.saveDirect(ru, custom); directError = null
+            TunnelLog.log("напрямую: российские ${if (direct?.ru == true) "вкл" else "выкл"}, своих ${direct?.custom?.size ?: 0}")
+            refreshProfile(true)
+            if (TunnelState.running) {
+                val node = status.nodeId
+                BypenVpnService.send(Store.ctx, BypenVpnService.ACTION_STOP)
+                repeat(40) { if (TunnelState.running) kotlinx.coroutines.delay(250) }
+                BypenVpnService.send(Store.ctx, BypenVpnService.ACTION_START, node ?: settings.preferredNode)
+            }
+            onDone(true)
+        } catch (e: Exception) { directError = e.message; onDone(false) } finally { directSaving = false }
+    }
+
     fun cancelBotLogin() { botJob?.cancel(); botJob = null; awaitingBot = null; busy = false }
 
     fun logout() {

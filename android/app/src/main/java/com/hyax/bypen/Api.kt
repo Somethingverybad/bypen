@@ -105,6 +105,36 @@ object Api {
         return SignedProfile(payload, obj!!.optString("sig", ""), obj.optString("pub", ""))
     }
 
+    // Напрямую, мимо VPN — настройки в профиле WYX (сервер: chat/vpn.py VpnDirectView)
+    data class DirectSettings(val ru: Boolean, val custom: List<String>, val ruCount: Int)
+
+    private fun direct(o: JSONObject?): DirectSettings {
+        val arr = o?.optJSONArray("custom")
+        return DirectSettings(o?.optBoolean("ru", true) ?: true, (0 until (arr?.length() ?: 0)).map { arr!!.getString(it) }, o?.optInt("ru_count", 0) ?: 0)
+    }
+
+    suspend fun fetchDirect(): DirectSettings {
+        val (code, obj) = authorized("vpn/direct/", "GET")
+        if (code != 200) throw ApiError(detail(obj) ?: "Настройки не получены ($code)")
+        return direct(obj)
+    }
+
+    suspend fun saveDirect(ru: Boolean? = null, custom: List<String>? = null): DirectSettings {
+        val body = JSONObject()
+        ru?.let { body.put("ru", it) }
+        custom?.let { body.put("custom", JSONArray(it)) }
+        val (code, obj) = authorized("vpn/direct/", "PUT", body)
+        if (code != 200) throw ApiError(detail(obj) ?: "Не сохранилось ($code)")
+        return direct(obj)
+    }
+
+    /** Отправить свои настройки «напрямую» человеку по логину WYX — бот «Бупень» спросит «Принять?». */
+    suspend fun shareDirect(username: String): String {
+        val (code, obj) = authorized("vpn/direct/share/", "POST", JSONObject().put("username", username))
+        if (code != 200) throw ApiError(detail(obj) ?: "Не отправилось ($code)")
+        return obj?.optString("username", username) ?: username
+    }
+
     suspend fun report(events: List<JSONObject>): Int {
         val (code, obj) = authorized("vpn/report/", "POST", JSONObject().put("events", JSONArray(events)))
         if (code != 200) throw ApiError(detail(obj) ?: "Отчёт не принят ($code)")

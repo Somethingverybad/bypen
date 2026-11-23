@@ -59,6 +59,14 @@ struct DirectList: Codable, Equatable {
         return DirectList(domains: uniq(domains + other.domains), cidrs: uniq(cidrs + other.cidrs))
     }
 
+    /// Правила ядра: «example.com» — домен и поддомены (суффикс), «full:example.com» — только он.
+    var xrayDomains: [String] { domains.map { $0.hasPrefix("full:") ? $0 : "domain:" + $0 } }
+
+    /// Исключения системного прокси: суффикс → сам домен и «*.домен», full: → только он.
+    var proxyBypass: [String] {
+        domains.flatMap { $0.hasPrefix("full:") ? [String($0.dropFirst(5))] : [$0, "*." + $0] }
+    }
+
     /// (адрес, длина префикса) для исключения маршрутов; кривые записи пропускаются.
     var parsedCIDRs: [(addr: String, prefix: Int, v6: Bool)] {
         cidrs.compactMap { c in

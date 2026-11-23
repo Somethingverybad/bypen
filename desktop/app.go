@@ -29,7 +29,11 @@ type App struct {
 	lastProfileFetch time.Time
 	update           *UpdateInfo
 	quit             chan struct{}
-	awaitingBot      string        // ждём «Да» в WYX — имя бота
+	awaitingBot      string // ждём «Да» в WYX — имя бота
+	direct           *DirectSettings
+	directErr        string
+	directPending    bool          // сохранили при включённом VPN — применится после переподключения
+	directNote       string        // итог «Поделиться»
 	botCancel        chan struct{} // закрыть — прервать ожидание
 }
 
@@ -119,6 +123,72 @@ func (a *App) LoginViaWYX(u string) {
 		tlog.Log("вход через WYX: подтверждён")
 		a.refreshProfile(true)
 	}()
+}
+
+// LoadDirect — настройки «напрямую» из профиля WYX.
+func (a *App) LoadDirect() {
+	d, err := a.api.FetchDirect()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if err != nil {
+		a.directErr = err.Error()
+		return
+	}
+	a.direct, a.directErr = d, ""
+}
+
+// SaveDirect сохраняет в профиль WYX и перечитывает список узлов; при включённом VPN
+// новые правила применятся после переподключения (TUN снова попросит права администратора).
+func (a *App) SaveDirect(body map[string]any) {
+	d, err := a.api.SaveDirect(body)
+	a.mu.Lock()
+	if err != nil {
+		a.directErr = err.Error()
+		a.mu.Unlock()
+		return
+	}
+	a.direct, a.directErr = d, ""
+	a.mu.Unlock()
+	tlog.Log("напрямую: российские %v, своих %d", d.RU, len(d.Custom))
+	a.refreshProfile(true)
+	if a.engine.Running() {
+		a.mu.Lock()
+		a.directPending = true
+		a.mu.Unlock()
+	}
+}
+
+// ShareDirect — поделиться настройками «напрямую» по логину WYX.
+func (a *App) ShareDirect(username string) {
+	u := strings.TrimLeft(strings.TrimSpace(username), "@")
+	if u == "" {
+		return
+	}
+	name, err := a.api.ShareDirect(u)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if err != nil {
+		a.directErr = err.Error()
+		return
+	}
+	a.directErr, a.directNote = "", "Отправлено @"+name+" — бот «Бупень» спросит, принять ли настройки"
+}
+
+// ReconnectDirect — переподключиться, чтобы применить список «напрямую».
+func (a *App) ReconnectDirect() {
+	node := a.engine.Status().NodeID
+	a.engine.Stop("применить список «напрямую»")
+	for i := 0; i < 40 && a.engine.Running(); i++ {
+		time.Sleep(250 * time.Millisecond)
+	}
+	a.mu.Lock()
+	a.directPending = false
+	a.mu.Unlock()
+	if node != "" {
+		a.Connect(&node)
+	} else {
+		a.Connect(nil)
+	}
 }
 
 func (a *App) CancelBotLogin() {
@@ -277,28 +347,32 @@ func (a *App) Shutdown() {
 // ---- снимок для интерфейса ----
 
 type viewState struct {
-	LoggedIn    bool        `json:"loggedIn"`
-	Username    string      `json:"username"`
-	Busy        bool        `json:"busy"`
-	Error       string      `json:"error,omitempty"`
-	ProfileNote string      `json:"profileNote,omitempty"`
-	Nodes       []VpnNode   `json:"nodes"`
-	UUIDPrefix  string      `json:"uuidPrefix,omitempty"`
-	Settings    Settings    `json:"settings"`
-	Status      Status      `json:"status"`
-	Running     bool        `json:"running"`
-	Version     string      `json:"version"`
-	Platform    string      `json:"platform"`
-	Xray        string      `json:"xray"`
-	Update      *UpdateInfo `json:"update,omitempty"`
-	AwaitingBot string      `json:"awaitingBot,omitempty"`
+	LoggedIn      bool            `json:"loggedIn"`
+	Username      string          `json:"username"`
+	Busy          bool            `json:"busy"`
+	Error         string          `json:"error,omitempty"`
+	ProfileNote   string          `json:"profileNote,omitempty"`
+	Nodes         []VpnNode       `json:"nodes"`
+	UUIDPrefix    string          `json:"uuidPrefix,omitempty"`
+	Settings      Settings        `json:"settings"`
+	Status        Status          `json:"status"`
+	Running       bool            `json:"running"`
+	Version       string          `json:"version"`
+	Platform      string          `json:"platform"`
+	Xray          string          `json:"xray"`
+	Update        *UpdateInfo     `json:"update,omitempty"`
+	AwaitingBot   string          `json:"awaitingBot,omitempty"`
+	Direct        *DirectSettings `json:"direct,omitempty"`
+	DirectError   string          `json:"directError,omitempty"`
+	DirectPending bool            `json:"directPending,omitempty"`
+	DirectNote    string          `json:"directNote,omitempty"`
 }
 
 func (a *App) View() viewState {
 	a.mu.Lock()
 	v := viewState{LoggedIn: a.api.st.Refresh != "", Username: a.api.st.Username, Busy: a.busy, Error: a.lastErr,
 		ProfileNote: a.profileNote, Version: version, Platform: platformTag(), Xray: xrayVersion(), Update: a.update,
-		AwaitingBot: a.awaitingBot}
+		AwaitingBot: a.awaitingBot, Direct: a.direct, DirectError: a.directErr, DirectPending: a.directPending && a.engine.Running(), DirectNote: a.directNote}
 	if a.profile != nil {
 		v.Nodes = a.profile.Nodes
 		if len(a.profile.User.UUID) >= 8 {

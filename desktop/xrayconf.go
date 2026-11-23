@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 )
 
 // Порты локальных входов. BYPEN_PORT_BASE — только для проверок (не мешать другому клиенту).
@@ -133,7 +134,11 @@ func directRules(d DirectList) []any {
 	if len(d.Domains) > 0 {
 		doms := make([]string, len(d.Domains))
 		for i, x := range d.Domains {
-			doms[i] = "domain:" + x
+			if strings.HasPrefix(x, "full:") { // только этот адрес
+				doms[i] = x
+			} else { // домен и поддомены (суффикс)
+				doms[i] = "domain:" + x
+			}
 		}
 		rules = append(rules, map[string]any{"type": "field", "domain": doms, "outboundTag": "direct"})
 	}

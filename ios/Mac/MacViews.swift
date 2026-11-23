@@ -252,6 +252,7 @@ struct MacSettingsView: View {
             Section("Переключение") {
                 Toggle("Переключать узел, если не отвечает", isOn: $model.settings.autoSwitch)
             }
+            MacDirectSection()
             Section("Узел") {
                 Picker("Выбор", selection: Binding(get: { model.settings.preferredNode ?? "" }, set: { model.settings.preferredNode = $0.isEmpty ? nil : $0 })) {
                     Text("Автоматически").tag("")
@@ -279,7 +280,7 @@ struct MacSettingsView: View {
                 if let e = model.updateError { Text(e).font(.caption).foregroundStyle(.red) }
             }
         }
-        .formStyle(.grouped).frame(width: 440, height: 520)
+        .formStyle(.grouped).frame(width: 460, height: 600)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
     }
 }
@@ -313,5 +314,76 @@ struct MacUpdateCard: View {
             if let e = model.updateError { Text(e).font(.system(size: 11)).foregroundStyle(t.destructive) }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading).settingsCard(t, radius: 16)
+    }
+}
+
+/// «Напрямую, мимо VPN»: российские сайты (список сети WYX) и свои адреса. Хранится в профиле
+/// WYX — одно на все устройства; при включённом VPN применяется после переподключения.
+struct MacDirectSection: View {
+    @EnvironmentObject var model: MacModel
+    @State private var newEntry = ""
+    @State private var askShare = false
+    @State private var shareTo = ""
+    var body: some View {
+        Section {
+            Toggle("Российские сайты", isOn: Binding(get: { model.direct?.ru ?? true },
+                                                    set: { v in model.direct?.ru = v; Task { await model.saveDirect(ru: v) } }))
+            ForEach(model.direct?.custom ?? [], id: \.self) { e in
+                HStack {
+                    Text(Self.label(e))
+                    Spacer()
+                    Button { remove(e) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .buttonStyle(.plain).help("Убрать")
+                }
+            }
+            HStack {
+                TextField("example.com, .ru или =точный.адрес", text: $newEntry).onSubmit { add() }
+                Button("Добавить") { add() }.disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty || model.directSaving)
+            }
+            Button("Поделиться по логину WYX…") { shareTo = ""; askShare = true }
+            Text(footnote).font(.caption).foregroundStyle(.secondary)
+            if let n = model.directNote { Text(n).font(.caption).foregroundStyle(.secondary) }
+            if let e = model.directError { Text(e).font(.caption).foregroundStyle(.red) }
+            if model.directPending && model.isActive {
+                HStack {
+                    Text("Применится после переподключения.").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Переподключить") { Task { await model.reconnectToApply() } }
+                }
+            }
+        } header: {
+            HStack { Text("Напрямую, мимо VPN"); if model.directSaving { ProgressView().controlSize(.mini) } }
+        }
+        .task { await model.loadDirect() }
+        .alert("Поделиться настройками", isPresented: $askShare) {
+            TextField("Ник в WYX", text: $shareTo)
+            Button("Отправить") { let u = shareTo; Task { await model.shareDirect(username: u) } }
+            Button("Отмена", role: .cancel) {}
+        } message: {
+            Text("Бот «Бупень» пришлёт человеку ваши настройки — он сам решит, принять ли их.")
+        }
+    }
+
+    private var footnote: String {
+        var s = "Российские — зоны .ru, .su, .рф"
+        if let n = model.direct?.ruCount, n > 4 { s += " и ещё \(n - 4) адресов из списка сети WYX" }
+        return s + ". Свои: example.com — вместе с поддоменами, .ru — вся зона, =example.com — только этот адрес. Хранится в аккаунте WYX — действует на всех устройствах."
+    }
+
+    private func add() {
+        let e = newEntry.trimmingCharacters(in: .whitespaces)
+        guard !e.isEmpty else { return }
+        let list = (model.direct?.custom ?? []) + [e]
+        Task { if await model.saveDirect(custom: list) { newEntry = "" } }
+    }
+
+    private func remove(_ e: String) {
+        let list = (model.direct?.custom ?? []).filter { $0 != e }
+        Task { await model.saveDirect(custom: list) }
+    }
+
+    static func label(_ e: String) -> String {
+        if e.hasPrefix("full:") { return "= " + e.dropFirst(5) }
+        return e.contains(".") ? e : "." + e
     }
 }

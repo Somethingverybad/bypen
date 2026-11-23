@@ -95,8 +95,18 @@ function render() {
 const CHECK = '<svg class="check" viewBox="0 0 57.88 41.72" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 23.17L18.55 39.72L55.88 2"/></svg>';
 const toggle = (on, key) => `<button class="toggle ${on ? "on" : ""}" data-toggle="${key}" aria-pressed="${on}"></button>`;
 
+// «full:x» → «= x», зона без точки → «.ru», домен — как есть.
+const dlabel = (e) => e.startsWith("full:") ? "= " + e.slice(5) : (e.includes(".") ? e : "." + e);
+
 function renderSettings() {
   const s = S.settings;
+  // настройки перерисовываются раз в секунду — поле «свой адрес» не должно терять набранное
+  const inp = $("directInput");
+  const keep = inp ? { v: inp.value, f: document.activeElement === inp, p: inp.selectionStart } : null;
+  const d = S.direct;
+  const ruOn = d ? d.ru : true;
+  const n = d ? d.ruCount : 0;
+  const custom = (d ? d.custom : []).map((e) => `<div class="divider"></div><div class="row"><span class="grow">${esc(dlabel(e))}</span><button class="tool" data-direct-del="${esc(e)}">убрать</button></div>`).join("");
   const nodes = S.nodes.map((n) => {
     const cur = S.running && S.status.nodeId === n.id;
     const sub = (n.kind === "reality" ? "Reality" : "XHTTP") + " • " + (n.ok ? (n.rtt_ms != null ? n.rtt_ms + " мс" : "жив") : "не отвечает из Москвы");
@@ -117,6 +127,11 @@ function renderSettings() {
     <div class="row"><span class="grow">Менять узел в простое</span>${toggle(s.rotateIdle, "rotateIdle")}</div>
     ${s.rotateIdle ? `<div class="divider"></div><div class="row"><span class="grow">Не чаще чем</span><span class="seg">${minutes}</span></div>` : ""}
   </div><div class="sec-foot">В простое (меньше 300 КБ за 10 минут) трафик уводится на другой живой узел, чтобы не идти всё время в одну точку</div></div>
+  <div class="sec"><div class="sec-title">Напрямую, мимо VPN</div><div class="card settings-card">
+    <div class="row"><span class="grow">Российские сайты</span><button class="toggle ${ruOn ? "on" : ""}" data-direct-ru aria-pressed="${ruOn}"></button></div>${custom}
+    <div class="divider"></div><div class="row"><input id="directInput" class="inline-field grow" placeholder="example.com, .ru или =точный.адрес" autocapitalize="off" spellcheck="false"><button class="tool accent" id="directAdd">добавить</button></div>
+    <div class="divider"></div><div class="row click" id="directShare"><span class="grow accent">Поделиться по логину WYX</span><span class="val">➤</span></div>
+  </div><div class="sec-foot">${S.directError ? `<span class="danger">${esc(S.directError)}</span><br>` : ""}${S.directNote ? `${esc(S.directNote)}<br>` : ""}Российские — зоны .ru, .su, .рф${n > 4 ? ` и ещё ${n - 4} адресов из списка сети WYX` : ""}. Свои: example.com — вместе с поддоменами, .ru — вся зона, =example.com — только этот адрес. Хранится в аккаунте WYX — действует на всех устройствах.${S.directPending ? ` <br>Применится после переподключения — <a id="directReconnect">переподключить</a>.` : ""}</div></div>
   <div class="sec"><div class="sec-title">Узел <button class="tool" id="refreshNodes">обновить</button></div><div class="card settings-card">
     <div class="row click" data-node=""><span class="grow">Автоматически</span>${s.preferredNode ? "" : CHECK}</div>${nodes}
   </div><div class="sec-foot">Выбранный узел становится первым; если он не отвечает, приложение всё равно уйдёт на другой</div></div>
@@ -130,12 +145,37 @@ function renderSettings() {
     <div class="row"><span class="grow">Ядро Xray</span><span class="val">${esc(S.xray)}</span></div><div class="divider"></div>
     <div class="row click danger" id="quitApp">Выйти из Бупеня</div>
   </div></div>`;
+  const ni = $("directInput");
+  if (keep && ni) { ni.value = keep.v; if (keep.f) { ni.focus(); ni.setSelectionRange(keep.p, keep.p); } }
+  ni.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("directAdd").click(); } };
+}
+
+async function saveDirect(direct) {
+  try { await call("direct/save", { direct }); } catch (_) {}
+  await refresh();
 }
 
 $("sheetBody").addEventListener("click", async (e) => {
-  const t = e.target.closest("[data-toggle],[data-minutes],[data-node],[data-mode],[data-theme-set],#themeRow,#logout,#quitApp,#refreshNodes");
+  const t = e.target.closest("[data-toggle],[data-minutes],[data-node],[data-mode],[data-theme-set],#themeRow,#logout,#quitApp,#refreshNodes,[data-direct-ru],[data-direct-del],#directAdd,#directReconnect,#directShare");
   if (!t || sheet !== "settings") return;
   const s = S.settings;
+  const cur = S.direct ? S.direct.custom : [];
+  if (t.dataset.directRu !== undefined) return saveDirect({ ru: !(S.direct ? S.direct.ru : true) });
+  if (t.dataset.directDel !== undefined) return saveDirect({ custom: cur.filter((x) => x !== t.dataset.directDel) });
+  if (t.id === "directAdd") {
+    const v = $("directInput").value.trim();
+    if (!v) return;
+    await call("direct/save", { direct: { custom: cur.concat([v]) } }).catch(() => {});
+    await refresh();
+    if (!S.directError) $("directInput").value = "";
+    return;
+  }
+  if (t.id === "directReconnect") { await call("direct/reconnect", {}); return refresh(); }
+  if (t.id === "directShare") {
+    const u = prompt("Поделиться настройками «напрямую»\nНик в WYX — бот «Бупень» пришлёт человеку ваши настройки, он сам решит, принять ли их:");
+    if (u && u.trim()) { await call("direct/share", { username: u.trim() }).catch(() => {}); }
+    return refresh();
+  }
   if (t.dataset.toggle) await call("settings", { settings: { [t.dataset.toggle]: !s[t.dataset.toggle] } });
   else if (t.dataset.minutes) await call("settings", { settings: { rotateMinutes: +t.dataset.minutes } });
   else if (t.dataset.node !== undefined) await call("select", { node: t.dataset.node || null });
@@ -165,7 +205,7 @@ function openSheet(kind) {
     $("copyLog").onclick = async () => { const r = await call("log"); navigator.clipboard?.writeText((r.log || "") + "\n\n" + (r.xray || "")); };
     $("clearLog").onclick = async () => { await call("log/clear", {}); renderLog(); };
     renderLog().then(() => { $("sheetBody").scrollTop = $("sheetBody").scrollHeight; });
-  } else renderSettings();
+  } else { call("direct/load", {}).catch(() => {}); renderSettings(); }
 }
 function closeSheet() { sheet = null; themeMenu = false; $("sheetWrap").classList.add("hidden"); }
 

@@ -125,6 +125,59 @@ final class MacModel: ObservableObject {
         }
     }
 
+    // MARK: напрямую, мимо VPN (хранится в профиле WYX — одно на все устройства)
+
+    @Published var direct: API.DirectSettings?
+    @Published var directError: String?
+    @Published var directSaving = false
+    /// Сохранили при включённом VPN — правила применятся после переподключения.
+    @Published var directPending = false
+
+    /// Последний итог «Поделиться» — показывается под секцией.
+    @Published var directNote: String?
+
+    func shareDirect(username: String) async {
+        let u = username.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+        guard !u.isEmpty else { return }
+        do {
+            let name = try await API.shared.shareDirect(username: u)
+            directNote = "Отправлено @\(name) — бот «Бупень» спросит, принять ли настройки"
+            directError = nil
+        } catch {
+            directError = error.localizedDescription
+        }
+    }
+
+    func loadDirect() async {
+        do { direct = try await API.shared.fetchDirect(); directError = nil }
+        catch { directError = error.localizedDescription }
+    }
+
+    @discardableResult
+    func saveDirect(ru: Bool? = nil, custom: [String]? = nil) async -> Bool {
+        directSaving = true; defer { directSaving = false }
+        do {
+            direct = try await API.shared.saveDirect(ru: ru, custom: custom)
+            directError = nil
+            log.log("напрямую: российские \(direct?.ru == true ? "вкл" : "выкл"), своих \(direct?.custom.count ?? 0)")
+            await refreshProfile(force: true)
+            if isActive { directPending = true }
+            return true
+        } catch {
+            directError = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Переподключиться, чтобы применить новый список (в TUN снова спросит пароль администратора).
+    func reconnectToApply() async {
+        let node = status.nodeId
+        engine.stop(reason: "применить список «напрямую»")
+        for _ in 0..<40 where isActive { try? await Task.sleep(nanoseconds: 250_000_000) }
+        directPending = false
+        await connect(nodeId: node)
+    }
+
     func cancelBotLogin() {
         botTask?.cancel(); botTask = nil
         awaitingBot = nil; busy = false

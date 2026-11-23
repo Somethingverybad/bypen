@@ -16,7 +16,7 @@ enum SystemProxy {
     static func enable(socksPort: Int, httpPort: Int, direct: DirectList = .builtin) -> String? {
         var cmds: [[String]] = []
         // WYX — мимо прокси: и домен, и все поддомены
-        let wyx = direct.domains.flatMap { [$0, "*." + $0] }
+        let wyx = direct.proxyBypass
         for s in services() {
             cmds.append(["-setsocksfirewallproxy", s, "127.0.0.1", "\(socksPort)"])
             cmds.append(["-setwebproxy", s, "127.0.0.1", "\(httpPort)"])

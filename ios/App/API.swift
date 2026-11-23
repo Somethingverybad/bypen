@@ -155,6 +155,39 @@ final class API {
         return SignedProfile(payload: payload, sig: obj?["sig"] as? String ?? "", pub: obj?["pub"] as? String ?? "")
     }
 
+    // MARK: напрямую, мимо VPN — настройки в профиле WYX (сервер: chat/vpn.py VpnDirectView)
+
+    struct DirectSettings: Equatable { var ru: Bool; var custom: [String]; var ruCount: Int }
+
+    private static func direct(_ obj: [String: Any]?) -> DirectSettings {
+        DirectSettings(ru: obj?["ru"] as? Bool ?? true, custom: obj?["custom"] as? [String] ?? [], ruCount: obj?["ru_count"] as? Int ?? 0)
+    }
+
+    func fetchDirect() async throws -> DirectSettings {
+        let (data, resp) = try await authorized(path: "vpn/direct/", method: "GET")
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard resp.statusCode == 200 else { throw APIError(message: API.detail(obj) ?? "Настройки не получены (\(resp.statusCode))") }
+        return API.direct(obj)
+    }
+
+    func saveDirect(ru: Bool? = nil, custom: [String]? = nil) async throws -> DirectSettings {
+        var body: [String: Any] = [:]
+        if let ru { body["ru"] = ru }
+        if let custom { body["custom"] = custom }
+        let (data, resp) = try await authorized(path: "vpn/direct/", method: "PUT", body: body)
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard resp.statusCode == 200 else { throw APIError(message: API.detail(obj) ?? "Не сохранилось (\(resp.statusCode))") }
+        return API.direct(obj)
+    }
+
+    /// Отправить свои настройки «напрямую» человеку по логину WYX — бот «Бупень» спросит его «Принять?».
+    func shareDirect(username: String) async throws -> String {
+        let (data, resp) = try await authorized(path: "vpn/direct/share/", method: "POST", body: ["username": username])
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard resp.statusCode == 200 else { throw APIError(message: API.detail(obj) ?? "Не отправилось (\(resp.statusCode))") }
+        return obj?["username"] as? String ?? username
+    }
+
     func report(_ events: [[String: Any]]) async throws -> Int {
         let (data, resp) = try await authorized(path: "vpn/report/", method: "POST", body: ["events": events])
         let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

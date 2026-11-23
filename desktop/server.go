@@ -63,6 +63,7 @@ func (s *uiServer) api(w http.ResponseWriter, r *http.Request) {
 		Node     *string         `json:"node"`
 		Settings json.RawMessage `json:"settings"`
 		URL      string          `json:"url"`
+		Direct   json.RawMessage `json:"direct"`
 	}
 	if r.Method == http.MethodPost {
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&body)
@@ -85,6 +86,20 @@ func (s *uiServer) api(w http.ResponseWriter, r *http.Request) {
 		reply(map[string]any{"ok": true})
 	case "/api/login/wyx":
 		a.LoginViaWYX(body.Username)
+		reply(map[string]any{"ok": true})
+	case "/api/direct/load":
+		go a.LoadDirect()
+		reply(map[string]any{"ok": true})
+	case "/api/direct/save":
+		var dbody map[string]any
+		_ = json.Unmarshal(body.Direct, &dbody)
+		a.SaveDirect(dbody)
+		reply(map[string]any{"ok": true})
+	case "/api/direct/share":
+		a.ShareDirect(body.Username)
+		reply(map[string]any{"ok": true})
+	case "/api/direct/reconnect":
+		go a.ReconnectDirect()
 		reply(map[string]any{"ok": true})
 	case "/api/login/cancel":
 		a.CancelBotLogin()

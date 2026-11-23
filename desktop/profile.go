@@ -73,6 +73,20 @@ var builtinDirect = DirectList{
 	CIDRs: []string{"194.164.245.144/32"},
 }
 
+// Исключения системного прокси: суффикс → сам домен и wild+домен (wild — «*.» или «.» у KDE),
+// «full:домен» → только он.
+func (d DirectList) bypassHosts(wild string) []string {
+	var out []string
+	for _, x := range d.Domains {
+		if strings.HasPrefix(x, "full:") {
+			out = append(out, strings.TrimPrefix(x, "full:"))
+		} else {
+			out = append(out, x, wild+x)
+		}
+	}
+	return out
+}
+
 func (d DirectList) merged(o *DirectList) DirectList {
 	if o == nil {
 		return d
