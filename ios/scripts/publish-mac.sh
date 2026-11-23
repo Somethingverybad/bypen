@@ -13,9 +13,15 @@ PY=~/.hyax-venv/bin/python
 N=$(git rev-list --count HEAD)
 V="0.1.$N"
 export BYPEN_BUILD=$N BYPEN_VERSION=$V
-zsh scripts/build-mac.sh
 APP="$ROOT/desktop/dist/mac/Bypen.app"
 ZIP="$ROOT/desktop/dist/bypen-mac-$V.zip"
+# BYPEN_SKIP_BUILD=1 — взять уже собранную build-mac.sh сборку этого же номера
+if [[ ${BYPEN_SKIP_BUILD:-} == 1 ]]; then
+  [[ -f $ZIP ]] || { echo "нет $ZIP — сначала scripts/build-mac.sh"; exit 1; }
+  [[ $(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$APP/Contents/Info.plist") == "$N" ]] || { echo "в $APP не сборка $N"; exit 1; }
+else
+  zsh scripts/build-mac.sh
+fi
 echo "заверение у Apple…"
 xcrun notarytool submit "$ZIP" --keychain-profile "${NOTARY_PROFILE:-hyax}" --wait
 xcrun stapler staple "$APP"
