@@ -18,5 +18,5 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "$LD" -o dist/
 cp packaging/linux/bypen.desktop packaging/linux/install.sh dist/linux/
 cp ui/icon.png dist/linux/bypen.png
 (cd dist/win && zip -q -9 ../bypen-windows-x64.zip bypen.exe wintun.dll wintun-LICENSE.txt)
-(cd dist && mv linux bypen && tar -czf bypen-linux-x64.tar.gz bypen && mv bypen linux)
+(cd dist && mv linux bypen && COPYFILE_DISABLE=1 tar --no-xattrs -czf bypen-linux-x64.tar.gz bypen && mv bypen linux)
 cd dist && shasum -a 256 bypen-windows-x64.zip bypen-linux-x64.tar.gz > SHA256SUMS && ls -la *.zip *.tar.gz && echo "версия $V"
